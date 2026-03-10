@@ -12,6 +12,8 @@ const PORT = process.env.PORT;
 import connectDB from "./config/database.js";
 import { seedAdmin } from "./utils/seedAdmin.js";
 import authRoutes from "./routes/auth.route.js";
+import sectionsRoutes from "./routes/section.route.js";
+import classRoutes from "./routes/class.route.js";
 
 app.use(cors());
 app.use(express.json());
@@ -24,8 +26,9 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/auth", authRoutes);
+app.use("/sections", sectionsRoutes);
+app.use("/classes", classRoutes);
 
-// 404 Handler - Express 5 compatible (NO "*" path argument)
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);
   err.statusCode = 404;

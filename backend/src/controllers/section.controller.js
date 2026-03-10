@@ -1,7 +1,7 @@
 import Section from "../models/section.model.js";
-export const getAllSections = (req, res, next) => {
+export const getAllSections = async (req, res, next) => {
   try {
-    const sections = Section.find({}).sort({ name: 1 });
+    const sections = await Section.find({}).sort({ name: 1 });
     return res.status(200).json({ message: "Sections fetched successfully", sections });
   } catch (error) {
     console.error("Error fetching sections:", error);
@@ -10,7 +10,7 @@ export const getAllSections = (req, res, next) => {
   }
 };
 
-export const createSection = (req, res, next) => {
+export const createSection = async (req, res, next) => {
   const { name } = req.body;
   if (!name) {
     const err = new Error("Section name is required");
@@ -19,7 +19,7 @@ export const createSection = (req, res, next) => {
   }
 
   try {
-    const newSection = Section.create({ name });
+    const newSection = await Section.create({ name });
     return res.status(201).json({ message: "Section created successfully", section: newSection });
   } catch (error) {
     console.error("Error creating section:", error);
@@ -28,7 +28,7 @@ export const createSection = (req, res, next) => {
   }
 };
 
-export const getSectionById = (req, res, next) => {
+export const getSectionById = async (req, res, next) => {
   const { id } = req.params;
   if (!id) {
     const err = new Error("Section ID is required");
@@ -37,7 +37,7 @@ export const getSectionById = (req, res, next) => {
   }
 
   try {
-    const section = Section.findById(id);
+    const section = await Section.findById(id);
     if (!section) {
       const err = new Error("Section not found");
       err.statusCode = 404;
@@ -51,7 +51,7 @@ export const getSectionById = (req, res, next) => {
   }
 };
 
-export const updateSectionById = (req, res, next) => {
+export const updateSectionById = async (req, res, next) => {
   const { id } = req.params;
   const { name } = req.body;
   if (!id) {
@@ -66,7 +66,7 @@ export const updateSectionById = (req, res, next) => {
   }
 
   try {
-    const updatedSection = Section.findByIdAndUpdate(id, { name }, { new: true });
+    const updatedSection = await Section.findByIdAndUpdate(id, { name }, { new: true });
     if (!updatedSection) {
       const err = new Error("Section not found");
       err.statusCode = 404;
@@ -82,7 +82,7 @@ export const updateSectionById = (req, res, next) => {
   }
 };
 
-export const deleteSectionById = (req, res, next) => {
+export const deleteSectionById = async (req, res, next) => {
   const { id } = req.params;
   if (!id) {
     const err = new Error("Section ID is required");
@@ -91,7 +91,7 @@ export const deleteSectionById = (req, res, next) => {
   }
 
   try {
-    const deletedSection = Section.findByIdAndDelete(id);
+    const deletedSection = await Section.findByIdAndDelete(id);
     if (!deletedSection) {
       const err = new Error("Section not found");
       err.statusCode = 404;
