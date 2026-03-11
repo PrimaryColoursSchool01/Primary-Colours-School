@@ -1,19 +1,28 @@
 import mongoose from "mongoose";
 
-const roleSchema = new mongoose.Schema(
+const itemsSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: true,
+      trim: true,
     },
     scope: {
       type: String,
       required: true,
       enum: ["global", "section", "class"],
     },
+    price: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
     sectionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
+      required: function () {
+        return this.scope === "section" || this.scope === "class";
+      },
     },
     classIds: [
       {
@@ -21,17 +30,14 @@ const roleSchema = new mongoose.Schema(
         ref: "Class",
       },
     ],
-    itemIds: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Item",
-        required: true,
-      },
-    ],
+    compulsory: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );
 
-const Role = mongoose.model("Role", roleSchema);
+const Item = mongoose.model("Item", itemsSchema);
 
-export default Role;
+export default Item;

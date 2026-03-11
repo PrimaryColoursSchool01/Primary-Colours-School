@@ -18,7 +18,7 @@ export const createClass = async (req, res, next) => {
     return next(err);
   }
   try {
-    const newClass = awaitClass.create({ name, sectionId });
+    const newClass = await Class.create({ name, sectionId });
     return res.status(201).json({ message: "Class created successfully", class: newClass });
   } catch (error) {
     console.error("Error creating class:", error);
