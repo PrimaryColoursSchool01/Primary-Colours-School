@@ -33,7 +33,7 @@ export const createItem = async (req, res, next) => {
     case "all-sections":
       scope = "global";
       break;
-    case "specific-all-classes":
+    case "section-all-classes":
       scope = "section";
       if (!sectionId) {
         const err = new Error("Section ID is required for specific all classes");

@@ -18,6 +18,12 @@ export const createClass = async (req, res, next) => {
     return next(err);
   }
   try {
+    const existingClassWithName = await Class.findOne({ name });
+    if (existingClassWithName) {
+      const err = new Error("Another class with the same name already exists");
+      err.statusCode = 400;
+      return next(err);
+    }
     const newClass = await Class.create({ name, sectionId });
     return res.status(201).json({ message: "Class created successfully", class: newClass });
   } catch (error) {
@@ -49,23 +55,28 @@ export const getClassById = async (req, res, next) => {
 
 export const updateClassById = async (req, res, next) => {
   const { id } = req.params;
-  const { name, sectionId } = req.body;
+  const { name } = req.body;
   if (!id) {
     const err = new Error("Class ID is required");
     err.statusCode = 400;
     return next(err);
   }
-  if (!name || !sectionId) {
-    const err = new Error("Class name and section ID are required");
+  if (!name) {
+    const err = new Error("New class name is required");
     err.statusCode = 400;
     return next(err);
   }
   try {
-    const updatedClass = await Class.findByIdAndUpdate(
-      id,
-      { name, sectionId },
-      { new: true },
-    ).populate("sectionId", "name");
+    const existingClassWithName = await Class.findOne({ name });
+    if (existingClassWithName && existingClassWithName._id.toString() !== id) {
+      const err = new Error("Another class with the same name already exists");
+      err.statusCode = 400;
+      return next(err);
+    }
+    const updatedClass = await Class.findByIdAndUpdate(id, { name }, { new: true }).populate(
+      "sectionId",
+      "name",
+    );
     if (!updatedClass) {
       const err = new Error("Class not found");
       err.statusCode = 404;

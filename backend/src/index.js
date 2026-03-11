@@ -14,6 +14,7 @@ import { seedAdmin } from "./utils/seedAdmin.js";
 import authRoutes from "./routes/auth.route.js";
 import sectionsRoutes from "./routes/section.route.js";
 import classRoutes from "./routes/class.route.js";
+import itemRoutes from "./routes/item.route.js";
 
 app.use(cors());
 app.use(express.json());
@@ -28,6 +29,7 @@ app.get("/health", (req, res) => {
 app.use("/auth", authRoutes);
 app.use("/sections", sectionsRoutes);
 app.use("/classes", classRoutes);
+app.use("/item", itemRoutes);
 
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);

@@ -13,7 +13,6 @@ const classSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
       required: true,
-      unique: true,
     },
   },
   { timestamps: true },
