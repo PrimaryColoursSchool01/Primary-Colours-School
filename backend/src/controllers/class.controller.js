@@ -103,6 +103,13 @@ export const deleteClassById = async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
+
+    // Pull the deleted class from all items that reference it
+    await Item.updateMany({ classIds: id }, { $pull: { classIds: id } });
+
+    // Delete class-scoped items that now have no classes left
+    await Item.deleteMany({ scope: "class", classIds: { $size: 0 } });
+
     return res.status(200).json({ message: "Class deleted successfully", class: deletedClass });
   } catch (error) {
     console.error("Error deleting class:", error);

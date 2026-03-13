@@ -1,4 +1,6 @@
 import Section from "../models/section.model.js";
+import Class from "../models/class.model.js";
+import Item from "../models/items-fess.model.js";
 export const getAllSections = async (req, res, next) => {
   try {
     const sections = await Section.find({}).sort({ name: 1 });
@@ -89,7 +91,6 @@ export const deleteSectionById = async (req, res, next) => {
     err.statusCode = 400;
     return next(err);
   }
-
   try {
     const deletedSection = await Section.findByIdAndDelete(id);
     if (!deletedSection) {
@@ -97,10 +98,18 @@ export const deleteSectionById = async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
-    return res.status(200).json({ message: "Section deleted successfully" });
+
+    // Delete all classes that belong to this section
+    await Class.deleteMany({ sectionId: id });
+
+    // Delete all items scoped to this section (section and class scoped)
+    await Item.deleteMany({ sectionId: id });
+
+    return res
+      .status(200)
+      .json({ message: "Section deleted successfully", section: deletedSection });
   } catch (error) {
     console.error("Error deleting section:", error);
-    if (!error.statusCode) error.statusCode = 500;
     return next(error);
   }
 };

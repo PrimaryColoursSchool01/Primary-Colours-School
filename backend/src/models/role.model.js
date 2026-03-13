@@ -15,12 +15,6 @@ const roleSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
     },
-    classIds: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Class",
-      },
-    ],
     itemIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
