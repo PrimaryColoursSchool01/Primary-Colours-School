@@ -105,80 +105,110 @@ export const getItemById = async (req, res, next) => {
 export const updateItemById = async (req, res, next) => {
   const { id } = req.params;
   const { name, price, compulsory, selectionType, sectionId, classIds } = req.body;
+
   if (!id) {
     const err = new Error("Item ID is required");
     err.statusCode = 400;
     return next(err);
   }
-  if (!name || !price || !selectionType) {
-    const err = new Error("Name, price, and selection type are required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (isNaN(price) || price < 0) {
-    const err = new Error("Price must be a valid positive number");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  let scope;
-  let finalSectionId;
-  let finalClassIds = [];
-
-  // Determine scope based on admin selection
-  switch (selectionType) {
-    case "all-sections":
-      scope = "global";
-      break;
-    case "specific-all-classes":
-      scope = "section";
-      if (!sectionId) {
-        const err = new Error("Section ID is required for specific all classes");
-        err.statusCode = 400;
-        return next(err);
-      }
-      finalSectionId = sectionId;
-      break;
-    case "section-specific-classes":
-      scope = "class";
-      if (!sectionId) {
-        const err = new Error("Section ID is required for section specific classes");
-        err.statusCode = 400;
-        return next(err);
-      }
-      if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
-        const err = new Error("At least one class ID is required for section specific classes");
-        err.statusCode = 400;
-        return next(err);
-      }
-      finalSectionId = sectionId;
-      finalClassIds = classIds;
-      break;
-    default:
-      const err = new Error("Invalid selection type");
-      err.statusCode = 400;
-      return next(err);
-  }
 
   try {
-    const updatedItem = await Item.findByIdAndUpdate(
-      id,
-      {
-        name,
-        price,
-        compulsory: compulsory || false,
-        scope,
-        sectionId: finalSectionId,
-        classIds: finalClassIds,
-      },
-      { new: true },
-    );
-    if (!updatedItem) {
+    // Fetch the current item to determine what properties are being updated
+    const currentItem = await Item.findById(id);
+    if (!currentItem) {
       const err = new Error("Item not found");
       err.statusCode = 404;
       return next(err);
     }
+
+    // Build the update object dynamically with only provided fields
+    const updateData = {};
+
+    // Validate and add basic fields if provided
+    if (name !== undefined) {
+      updateData.name = name;
+    }
+
+    if (price !== undefined) {
+      if (isNaN(price) || price < 0) {
+        const err = new Error("Price must be a valid positive number");
+        err.statusCode = 400;
+        return next(err);
+      }
+      updateData.price = price;
+    }
+
+    if (compulsory !== undefined) {
+      updateData.compulsory = compulsory;
+    }
+
+    // Validate scope-dependent fields only when selectionType is provided or changed
+    if (selectionType !== undefined) {
+      let scope;
+      let finalSectionId = null;
+      let finalClassIds = [];
+
+      switch (selectionType) {
+        case "all-sections":
+          scope = "global";
+          finalSectionId = null;
+          finalClassIds = [];
+          break;
+        case "section-all-classes":
+          scope = "section";
+          if (!sectionId) {
+            const err = new Error("Section ID is required for section-all-classes");
+            err.statusCode = 400;
+            return next(err);
+          }
+          finalSectionId = sectionId;
+          finalClassIds = [];
+          break;
+        case "section-specific-classes":
+          scope = "class";
+          if (!sectionId) {
+            const err = new Error("Section ID is required for section-specific-classes");
+            err.statusCode = 400;
+            return next(err);
+          }
+          if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
+            const err = new Error("At least one class ID is required for section-specific-classes");
+            err.statusCode = 400;
+            return next(err);
+          }
+          finalSectionId = sectionId;
+          finalClassIds = classIds;
+          break;
+        default:
+          const err = new Error("Invalid selection type");
+          err.statusCode = 400;
+          return next(err);
+      }
+
+      updateData.scope = scope;
+      updateData.sectionId = finalSectionId;
+      updateData.classIds = finalClassIds;
+    } else {
+      // If selection type is not being changed, validate based on current scope
+      if (currentItem.scope === "section" || currentItem.scope === "class") {
+        if (sectionId !== undefined) {
+          updateData.sectionId = sectionId;
+        }
+      }
+      if (currentItem.scope === "class" && classIds !== undefined) {
+        if (!Array.isArray(classIds) || classIds.length === 0) {
+          const err = new Error("At least one class ID is required for class scope items");
+          err.statusCode = 400;
+          return next(err);
+        }
+        updateData.classIds = classIds;
+      }
+    }
+
+    const updatedItem = await Item.findByIdAndUpdate(id, updateData, { new: true })
+      .populate("sectionId")
+      .populate("classIds");
+
     return res.status(200).json({ message: "Item updated successfully", item: updatedItem });
   } catch (error) {
     console.error("Error updating item:", error);
