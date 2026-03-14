@@ -232,11 +232,17 @@ export const deleteItemById = async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
+
+    // Pull the deleted item from all roles that reference it
+    await Role.updateMany({ itemIds: id }, { $pull: { itemIds: id } });
+
+    // Delete roles that now have no items left
+    await Role.deleteMany({ itemIds: { $size: 0 } });
+
     return res.status(200).json({ message: "Item deleted successfully", item: deletedItem });
   } catch (error) {
     console.error("Error deleting item:", error);
-    const err = new Error("Internal server error");
-    err.statusCode = 500;
-    return next(err);
+    if (!error.statusCode) error.statusCode = 500;
+    return next(error);
   }
 };
