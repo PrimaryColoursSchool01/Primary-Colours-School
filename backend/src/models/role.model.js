@@ -5,6 +5,7 @@ const roleSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
+      trim: true,
     },
     scope: {
       type: String,
@@ -14,12 +15,20 @@ const roleSchema = new mongoose.Schema(
     sectionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
+      required: function () {
+        return this.scope === "section" || this.scope === "class";
+      },
     },
+    classIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Class",
+      },
+    ],
     itemIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Item",
-        required: true,
       },
     ],
   },
