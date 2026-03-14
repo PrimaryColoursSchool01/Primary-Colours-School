@@ -11,14 +11,14 @@ import { requireRole } from "../middlewares/requireRole.js";
 
 const router = Router();
 
-router.get("/", requireAuth, requireRole("admin"), getAllRoles);
+router.get("/", requireAuth, requireRole("Admin"), getAllRoles);
 
-router.post("/", requireAuth, requireRole("admin"), createRole);
+router.post("/", requireAuth, requireRole("Admin"), createRole);
 
-router.get("/:id", requireAuth, requireRole("admin"), getRoleById);
+router.get("/:id", requireAuth, requireRole("Admin"), getRoleById);
 
-router.put("/:id", requireAuth, requireRole("admin"), updateRoleById);
+router.put("/:id", requireAuth, requireRole("Admin"), updateRoleById);
 
-router.delete("/:id", requireAuth, requireRole("admin"), deleteRoleById);
+router.delete("/:id", requireAuth, requireRole("Admin"), deleteRoleById);
 
 export default router;
