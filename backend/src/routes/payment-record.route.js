@@ -3,7 +3,6 @@ import {
   getAllPaymentRecords,
   createPaymentRecord,
   getPaymentRecordById,
-  deletePaymentRecordById,
   updatePaymentRecordById,
 } from "../controllers/payment-record.controller.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
@@ -18,7 +17,5 @@ router.post("/", createPaymentRecord);
 router.get("/:id", requireAuth, getPaymentRecordById);
 
 router.put("/:id", requireAuth, requireRole("Admin"), updatePaymentRecordById);
-
-router.delete("/:id", requireAuth, requireRole("Admin"), deletePaymentRecordById);
 
 export default router;
