@@ -12,9 +12,9 @@ import { requireRole } from "../middlewares/requireRole.js";
 const router = Router();
 
 router.get("/", getAllSections);
-router.post("/", requireAuth, requireRole("Admin"), createSection);
+router.post("/", requireAuth, requireRole("admin"), createSection);
 router.get("/:id", getSectionById);
-router.put("/:id", requireAuth, requireRole("Admin"), updateSectionById);
-router.delete("/:id", requireAuth, requireRole("Admin"), deleteSectionById);
+router.put("/:id", requireAuth, requireRole("admin"), updateSectionById);
+router.delete("/:id", requireAuth, requireRole("admin"), deleteSectionById);
 
 export default router;

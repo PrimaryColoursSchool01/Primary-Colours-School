@@ -16,6 +16,6 @@ router.post("/", createPaymentRecord);
 
 router.get("/:id", requireAuth, getPaymentRecordById);
 
-router.put("/:id", requireAuth, requireRole("Admin"), updatePaymentRecordById);
+router.put("/:id", requireAuth, requireRole("admin"), updatePaymentRecordById);
 
 export default router;

@@ -12,9 +12,9 @@ import { requireRole } from "../middlewares/requireRole.js";
 const router = Router();
 
 router.get("/", getAllClasses);
-router.post("/", requireAuth, requireRole("Admin"), createClass);
+router.post("/", requireAuth, requireRole("admin"), createClass);
 router.get("/:id", getClassById);
-router.put("/:id", requireAuth, requireRole("Admin"), updateClassById);
-router.delete("/:id", requireAuth, requireRole("Admin"), deleteClassById);
+router.put("/:id", requireAuth, requireRole("admin"), updateClassById);
+router.delete("/:id", requireAuth, requireRole("admin"), deleteClassById);
 
 export default router;

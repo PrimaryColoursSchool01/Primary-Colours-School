@@ -17,10 +17,18 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    userType: {
+      type: String,
+      required: true,
+      enum: ["admin", "staff"],
+      default: "staff",
+    },
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
-      required: true,
+      required: function () {
+        return this.userType === "staff";
+      },
     },
     refreshToken: {
       type: String,
