@@ -15,6 +15,8 @@ import authRoutes from "./routes/auth.route.js";
 import sectionsRoutes from "./routes/section.route.js";
 import classRoutes from "./routes/class.route.js";
 import itemRoutes from "./routes/item.route.js";
+import roleRoutes from "./routes/role.route.js";
+import paymentRecordRoutes from "./routes/payment-record.route.js";
 
 app.use(cors());
 app.use(express.json());
@@ -30,6 +32,8 @@ app.use("/auth", authRoutes);
 app.use("/sections", sectionsRoutes);
 app.use("/classes", classRoutes);
 app.use("/item", itemRoutes);
+app.use("/role", roleRoutes);
+app.use("/payment-records", paymentRecordRoutes);
 
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);
