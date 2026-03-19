@@ -1,4 +1,6 @@
 import PaymentRecord from "../models/payment-record.model.js";
+import Class from "../models/class.model.js"
+import Item from "../models/items-fess.model.js"
 export const createPaymentRecord = async (req, res, next) => {
   const {
     nameOfChild,

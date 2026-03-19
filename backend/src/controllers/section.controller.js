@@ -1,10 +1,26 @@
 import Section from "../models/section.model.js";
 import Class from "../models/class.model.js";
 import Item from "../models/items-fess.model.js";
+
+
 export const getAllSections = async (req, res, next) => {
   try {
-    const sections = await Section.find({}).sort({ name: 1 });
-    return res.status(200).json({ message: "Sections fetched successfully", sections });
+    const sections = await Section.find({}).sort({ name: 1 }).lean();
+
+    const sectionsWithClasses = await Promise.all(
+      sections.map(async (section) => {
+        const classes = await Class.find({ sectionId: section._id })
+          .sort({ name: 1 })
+          .select("_id name")
+          .lean();
+        return { ...section, classes };
+      })
+    );
+
+    return res.status(200).json({
+      message: "Sections fetched successfully",
+      sections: sectionsWithClasses,
+    });
   } catch (error) {
     console.error("Error fetching sections:", error);
     if (!error.statusCode) error.statusCode = 500;

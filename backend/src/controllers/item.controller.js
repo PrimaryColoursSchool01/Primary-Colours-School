@@ -1,8 +1,12 @@
 import Item from "../models/items-fess.model.js";
+import Class from "../models/class.model.js"
 export const getAllItems = async (req, res, next) => {
   try {
     const items = await Item.find({}).populate("sectionId").populate("classIds");
-    return res.status(200).json(items);
+    return res.status(200).json({ 
+  message: "Items fetched successfully", 
+  items 
+});
   } catch (error) {
     console.error("Error fetching items:", error);
     if (!error.statusCode) error.statusCode = 500;
