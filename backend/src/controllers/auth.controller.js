@@ -58,6 +58,7 @@ export const login = async (req, res, next) => {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        userType: user.userType,
       },
     });
   } catch (error) {
@@ -251,6 +252,7 @@ export const refreshToken = async (req, res, next) => {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        userType: user.userType,
       },
     });
   } catch (error) {
