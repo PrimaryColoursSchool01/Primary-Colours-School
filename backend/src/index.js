@@ -19,7 +19,30 @@ import roleRoutes from "./routes/role.route.js";
 import paymentRecordRoutes from "./routes/payment-record.route.js";
 import userRoutes from "./routes/user.route.js";
 
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:5173", // main frontend (admin + staff)
+  "http://localhost:5174", // parent form (if running simultaneously)
+  process.env.FRONTEND_URL, // production frontend
+  process.env.FORM_URL, // production parent form
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow requests with no origin (Postman, mobile apps)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy: origin ${origin} not allowed`));
+      }
+    },
+    credentials: true, // required for httpOnly cookie (refresh token)
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(logger);
