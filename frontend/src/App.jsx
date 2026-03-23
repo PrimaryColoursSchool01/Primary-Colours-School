@@ -63,7 +63,14 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right" // or "bottom-right", "top-center", etc.
+        theme="light" // or "dark", "system"
+        richColors // enables richer color schemes
+        closeButton // adds a close button to each toast
+        duration={3000} // default duration in ms
+        // expand={false} // expand to fill width on mobile
+      />
       <Routes>
         {/* Public */}
         <Route

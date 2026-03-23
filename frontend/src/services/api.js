@@ -9,7 +9,7 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Attach access token ot every request
+// Attach access token to every request
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
 
@@ -24,6 +24,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // If this is a login request, do not attempt token refresh
+    if (originalRequest.url?.includes("/auth/login")) {
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -47,4 +52,5 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
 export default api;

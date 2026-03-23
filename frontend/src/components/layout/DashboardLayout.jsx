@@ -80,7 +80,7 @@ function SidebarContent({ onClose, onLogout }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5 custom-scrollbar">
         {navGroups.map((group) => (
           <div key={group.label}>
             <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-600 px-3 mb-1.5">
@@ -151,10 +151,10 @@ export default function DashboardLayout() {
   const handleLogout = async () => {
     try {
       await logout();
+      clearAuth(); // Added missing clearAuth call
     } catch {
       // proceed even if API call fails
     } finally {
-      clearAuth();
       navigate("/login");
       toast.success("Logged out successfully");
     }
@@ -163,7 +163,7 @@ export default function DashboardLayout() {
   return (
     <div className="flex h-dvh bg-[#f6f7f8] overflow-hidden">
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
-      <aside className="hidden lg:flex w-60 bg-[#0F172A] flex-col flex-shrink-0 h-full">
+      <aside className="hidden lg:flex w-60 bg-[#0F172A] flex-col flex-shrink-0 h-full custom-scrollbar">
         <SidebarContent onLogout={handleLogout} />
       </aside>
 
@@ -176,7 +176,7 @@ export default function DashboardLayout() {
             onClick={() => setSidebarOpen(false)}
           />
           {/* Drawer */}
-          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#0F172A] lg:hidden flex flex-col shadow-2xl">
+          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#0F172A] lg:hidden flex flex-col shadow-2xl custom-scrollbar">
             <SidebarContent onClose={() => setSidebarOpen(false)} onLogout={handleLogout} />
           </div>
         </>
@@ -186,7 +186,6 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 flex-shrink-0 z-30">
-          {/* Left */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
