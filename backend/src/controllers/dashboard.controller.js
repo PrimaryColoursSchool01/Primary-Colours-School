@@ -5,9 +5,9 @@ import ItemTransaction from "../models/item-transaction.model.js";
 
 export const getDashboardData = async (req, res, next) => {
   try {
-    const [stats, weeklySubmissions, revenueBreakdown, pipelineStatus] = await Promise.all([
+    const [stats, monthlySubmissions, revenueBreakdown, pipelineStatus] = await Promise.all([
       getStats(),
-      getWeeklySubmissions(),
+      getMonthlySubmissions(),
       getRevenueBreakdown(),
       getPipelineStatus(),
     ]);
@@ -16,7 +16,7 @@ export const getDashboardData = async (req, res, next) => {
       success: true,
       data: {
         stats,
-        weeklySubmissions,
+        monthlySubmissions,
         revenueBreakdown,
         pipelineStatus,
       },
@@ -70,26 +70,43 @@ async function getStats() {
   return { total, pending, accepted, rejected };
 }
 
-async function getWeeklySubmissions() {
-  const eightWeeksAgo = new Date();
-  eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+async function getMonthlySubmissions() {
+  // Get last 12 months from today
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
   const data = await PaymentRecord.aggregate([
-    { $match: { createdAt: { $gte: eightWeeksAgo } } },
+    { $match: { createdAt: { $gte: twelveMonthsAgo } } },
     {
       $group: {
         _id: {
           year: { $year: "$createdAt" },
-          week: { $week: "$createdAt" },
+          month: { $month: "$createdAt" },
         },
         count: { $sum: 1 },
       },
     },
-    { $sort: { "_id.year": 1, "_id.week": 1 } },
+    { $sort: { "_id.year": 1, "_id.month": 1 } },
   ]);
 
+  // Month names for formatting
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
   return data.map((item) => ({
-    week: `Wk ${String(item._id.week).padStart(2, "0")}`,
+    month: `${monthNames[item._id.month - 1]} ${String(item._id.year).slice(-2)}`,
     count: item.count,
   }));
 }
