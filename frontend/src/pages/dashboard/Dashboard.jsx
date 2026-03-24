@@ -10,15 +10,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import {
-  BarChart2,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Download,
-  ArrowUpRight,
-  ArrowRight,
-} from "lucide-react";
+import { BarChart2, Clock, CheckCircle2, XCircle, Download, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -85,8 +77,6 @@ const recentResponses = [
   },
 ];
 
-// ─── Stat cards config ────────────────────────────────────────────────────────
-
 const statCards = [
   {
     label: "Total Responses",
@@ -126,7 +116,7 @@ const statCards = [
   },
 ];
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
   const styles = {
@@ -136,14 +126,12 @@ function StatusBadge({ status }) {
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${styles[status]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${styles[status]}`}
     >
       {status}
     </span>
   );
 }
-
-// ─── Custom bar tooltip ───────────────────────────────────────────────────────
 
 function CustomBarTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -154,8 +142,6 @@ function CustomBarTooltip({ active, payload, label }) {
     </div>
   );
 }
-
-// ─── Custom pie tooltip ───────────────────────────────────────────────────────
 
 function CustomPieTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
@@ -171,95 +157,152 @@ function CustomPieTooltip({ active, payload }) {
 
 export default function Dashboard() {
   return (
-    <div className="p-6 sm:p-8 space-y-8">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8">
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            Dashboard Overview
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">
             Real-time school financial performance and response tracking.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="h-9 px-4 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-              Last 30 Days
-            </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button className="h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap">
+            Last 30 Days
           </button>
-          <button className="h-9 px-4 text-sm font-bold text-white bg-[#136dec] rounded-lg hover:opacity-90 transition-all flex items-center gap-2 shadow-sm shadow-[#136dec]/30">
-            <Download size={14} />
-            Export Report
+          <button className="h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-bold text-white bg-[#136dec] rounded-lg hover:opacity-90 transition-all flex items-center gap-1.5 shadow-sm shadow-[#136dec]/30 whitespace-nowrap">
+            <Download size={13} />
+            <span className="hidden sm:inline">Export Report</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* ── Stat cards ──────────────────────────────────────────────────────── */}
+      {/*
+        xs phones : 2 cols — compact but readable, big number still punches
+        sm tablets: 2 cols with more padding
+        lg desktop: 4 cols
+      */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
         {statCards.map((card) => (
           <div
             key={card.label}
-            className="bg-white rounded-xl border border-slate-200/80 p-5 hover:border-[#136dec]/30 hover:shadow-sm transition-all"
+            className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-4 lg:p-5 hover:border-[#136dec]/30 hover:shadow-sm transition-all"
           >
-            <div className="flex items-start justify-between mb-4">
-              <div className={`p-2 rounded-lg ${card.iconBg}`}>
-                <card.icon size={18} className={card.iconColor} strokeWidth={2} />
+            <div className="flex items-start justify-between mb-2.5 sm:mb-4">
+              <div className={`p-1.5 sm:p-2 rounded-lg ${card.iconBg}`}>
+                <card.icon size={14} className={`sm:hidden ${card.iconColor}`} strokeWidth={2} />
+                <card.icon
+                  size={18}
+                  className={`hidden sm:block ${card.iconColor}`}
+                  strokeWidth={2}
+                />
               </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${card.badgeColor}`}>
+              <span
+                className={`text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded leading-tight ${card.badgeColor}`}
+              >
                 {card.badge}
               </span>
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+            <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-0.5 sm:mb-1 leading-tight">
               {card.label}
             </p>
-            <h3 className="text-3xl font-extrabold text-slate-900">{card.value}</h3>
+            <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-none">
+              {card.value}
+            </h3>
           </div>
         ))}
       </div>
 
-      {/* Charts row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* ── Charts row 1 ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Bar chart */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 p-6">
-          <div className="flex items-start justify-between mb-6">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
+          <div className="flex items-start justify-between mb-4 sm:mb-5 lg:mb-6">
             <div>
-              <h4 className="font-bold text-slate-900 text-base">Payment Submissions</h4>
-              <p className="text-xs text-slate-500 mt-0.5">Weekly volume for the last 8 weeks</p>
+              <h4 className="font-bold text-slate-900 text-sm sm:text-base">Payment Submissions</h4>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                Weekly volume for the last 8 weeks
+              </p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-[#136dec]" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-[#136dec]" />
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                 Submissions
               </span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={weeklySubmissions} barCategoryGap="35%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis
-                dataKey="week"
-                tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
-                axisLine={false}
-                tickLine={false}
-                width={30}
-              />
-              <Tooltip content={<CustomBarTooltip />} cursor={{ fill: "#f8fafc" }} />
-              <Bar dataKey="count" fill="#136dec" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {/* Height wrapper — shorter on phones, full on desktop */}
+          <div className="h-36 sm:h-44 lg:h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={weeklySubmissions}
+                barCategoryGap="35%"
+                margin={{ top: 4, right: 0, left: -10, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 9, fontWeight: 700, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 9, fontWeight: 700, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={26}
+                />
+                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: "#f8fafc" }} />
+                <Bar dataKey="count" fill="#136dec" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Donut chart */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-6">
-          <h4 className="font-bold text-slate-900 text-base mb-0.5">Revenue Breakdown</h4>
-          <p className="text-xs text-slate-500 mb-4">Distribution by Fee Type</p>
-          <div className="relative flex items-center justify-center mb-6">
-            <ResponsiveContainer width="100%" height={180}>
+        {/* Donut chart
+            Shape is UNCHANGED from the original (innerRadius=55, outerRadius=80, height=180).
+            On small screens we scale the container down and reduce text sizes so
+            it fits without distorting the ring shape.
+        */}
+        <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
+          <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">
+            Revenue Breakdown
+          </h4>
+          <p className="text-[11px] sm:text-xs text-slate-500 mb-3 sm:mb-4">
+            Distribution by Fee Type
+          </p>
+
+          {/*
+            Donut wrapper:
+            - phones (< sm): h-[150px] — ring is slightly smaller but same proportions
+            - sm tablets:     h-[165px]
+            - lg desktop:     h-[180px] — original size
+            The relative wrapper + absolute center label pattern is the same as the original.
+          */}
+          <div className="relative h-[150px] sm:h-[165px] lg:h-[180px] mb-4 sm:mb-5 lg:mb-6">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
+                <Pie
+                  data={revenueBreakdown}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={65}
+                  paddingAngle={2}
+                  dataKey="value"
+                  startAngle={90}
+                  endAngle={-270}
+                  className="sm:hidden"
+                >
+                  {revenueBreakdown.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                {/* Desktop-size ring — hidden on phones */}
                 <Pie
                   data={revenueBreakdown}
                   cx="50%"
@@ -270,6 +313,7 @@ export default function Dashboard() {
                   dataKey="value"
                   startAngle={90}
                   endAngle={-270}
+                  className="hidden sm:block"
                 >
                   {revenueBreakdown.map((entry) => (
                     <Cell key={entry.name} fill={entry.color} />
@@ -278,55 +322,70 @@ export default function Dashboard() {
                 <Tooltip content={<CustomPieTooltip />} />
               </PieChart>
             </ResponsiveContainer>
+            {/* Center label — text scales down on small screens */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Total</p>
-              <p className="text-xl font-black text-slate-900">₦12.4M</p>
+              <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                Total
+              </p>
+              <p className="text-base sm:text-lg lg:text-xl font-black text-slate-900 leading-none">
+                ₦12.4M
+              </p>
             </div>
           </div>
-          <div className="space-y-2.5">
+
+          {/* Legend */}
+          <div className="space-y-2 sm:space-y-2.5">
             {revenueBreakdown.map((item) => (
               <div key={item.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 font-medium text-slate-500">
                   <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: item.color }}
                   />
-                  {item.name}
+                  <span className="text-[11px] sm:text-xs">{item.name}</span>
                 </div>
-                <span className="font-bold text-slate-900">{item.value}%</span>
+                <span className="font-bold text-slate-900 text-[11px] sm:text-xs">
+                  {item.value}%
+                </span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Charts row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* ── Charts row 2 ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Collection status */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-6">
-          <h4 className="font-bold text-slate-900 text-base mb-0.5">Collection Status</h4>
-          <p className="text-xs text-slate-500 mb-8">Paid vs Outstanding by Section</p>
-          <div className="space-y-8">
+        <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
+          <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">
+            Collection Status
+          </h4>
+          <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">
+            Paid vs Outstanding by Section
+          </p>
+          <div className="space-y-6 sm:space-y-7 lg:space-y-8">
             {collectionStatus.map((item) => (
-              <div key={item.section} className="space-y-2.5">
-                <div className="flex items-end justify-between">
-                  <span className="text-sm font-bold text-slate-900">{item.section}</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+              <div key={item.section} className="space-y-2 sm:space-y-2.5">
+                <div className="flex items-end justify-between gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+                    {item.section}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase shrink-0">
                     {item.collected}% Collected
                   </span>
                 </div>
-                <div className="h-5 w-full flex rounded-lg overflow-hidden bg-slate-100">
+                <div className="h-4 sm:h-5 w-full rounded-lg overflow-hidden bg-slate-100">
                   <div
-                    className="bg-[#136dec] h-full rounded-lg transition-all"
+                    className="bg-[#136dec] h-full rounded-lg transition-all duration-500"
                     style={{ width: `${item.collected}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] font-bold">
-                  <div className="flex items-center gap-1.5 text-[#136dec]">
+                <div className="flex justify-between text-[9px] sm:text-[10px] font-bold">
+                  <div className="flex items-center gap-1 sm:gap-1.5 text-[#136dec]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#136dec]" />
                     PAID: {item.amount}
                   </div>
-                  <div className="flex items-center gap-1.5 text-rose-500">
+                  <div className="flex items-center gap-1 sm:gap-1.5 text-rose-500">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                     DUE: {item.due}
                   </div>
@@ -336,50 +395,79 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent responses table */}
+        {/* Recent responses
+            Mobile: card list (much better UX than a squashed table)
+            md+:    full table
+        */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h4 className="font-bold text-slate-900 text-base">Recent Responses</h4>
+          <div className="px-4 sm:px-5 lg:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between">
+            <h4 className="font-bold text-slate-900 text-sm sm:text-base">Recent Responses</h4>
             <Link
               to="/responses"
-              className="text-xs font-bold text-[#136dec] hover:underline flex items-center gap-1"
+              className="text-[11px] sm:text-xs font-bold text-[#136dec] hover:underline flex items-center gap-1 shrink-0"
             >
               View All
-              <ArrowRight size={12} />
+              <ArrowRight size={11} />
             </Link>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Card list — phones only */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {recentResponses.map((row) => (
+              <div key={row.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900 truncate">{row.child}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    {row.class} · {row.payer}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className="text-sm font-bold text-slate-900">₦{row.amount}</span>
+                  <StatusBadge status={row.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Table — md and above */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                 <tr>
                   <th className="px-5 py-3.5">Child Name</th>
                   <th className="px-5 py-3.5">Class</th>
-                  <th className="px-5 py-3.5 hidden sm:table-cell">Payer</th>
+                  <th className="px-5 py-3.5">Payer</th>
                   <th className="px-5 py-3.5">Amount (₦)</th>
                   <th className="px-5 py-3.5">Status</th>
-                  <th className="px-5 py-3.5 hidden md:table-cell">Date</th>
+                  <th className="px-5 py-3.5 hidden lg:table-cell">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {recentResponses.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-5 py-3.5">
-                      <span className="text-sm font-bold text-slate-900">{row.child}</span>
+                      <span className="text-sm font-bold text-slate-900 whitespace-nowrap">
+                        {row.child}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-xs font-semibold text-slate-500">{row.class}</span>
-                    </td>
-                    <td className="px-5 py-3.5 hidden sm:table-cell">
-                      <span className="text-xs text-slate-400">{row.payer}</span>
+                      <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
+                        {row.class}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-sm font-bold text-slate-900">{row.amount}</span>
+                      <span className="text-xs text-slate-400 whitespace-nowrap">{row.payer}</span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm font-bold text-slate-900 whitespace-nowrap">
+                        {row.amount}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={row.status} />
                     </td>
-                    <td className="px-5 py-3.5 hidden md:table-cell">
-                      <span className="text-xs text-slate-400">{row.date}</span>
+                    <td className="px-5 py-3.5 hidden lg:table-cell">
+                      <span className="text-xs text-slate-400 whitespace-nowrap">{row.date}</span>
                     </td>
                   </tr>
                 ))}
@@ -389,16 +477,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Footer meta */}
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 border-t border-slate-200">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
           © 2025 Findora · Primary Colours Schools
         </p>
-        <div className="flex gap-5">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+        <div className="flex gap-4 sm:gap-5">
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             Privacy Policy
           </p>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             System Status: <span className="text-emerald-500">Normal</span>
           </p>
         </div>
