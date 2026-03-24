@@ -10,7 +10,17 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { BarChart2, Clock, CheckCircle2, XCircle, Download, ArrowRight } from "lucide-react";
+import {
+  BarChart2,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Download,
+  ArrowRight,
+  Package,
+  UserCheck,
+  ClipboardCheck,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -33,9 +43,32 @@ const revenueBreakdown = [
   { name: "Others", value: 6, color: "#6366f1" },
 ];
 
-const collectionStatus = [
-  { section: "Primary Section", collected: 82, amount: "₦4.2M", due: "₦0.9M" },
-  { section: "Secondary Section", collected: 68, amount: "₦5.1M", due: "₦2.4M" },
+// NEW: Payment-to-Handover Pipeline (replaces collectionStatus)
+const pipelineStatus = [
+  {
+    stage: "Pending Verification",
+    count: 38,
+    description: "Awaiting admin review",
+    percentage: 3,
+    color: "#f59e0b",
+    icon: Clock,
+  },
+  {
+    stage: "Items Assigned",
+    count: 156,
+    description: "Staff yet to hand over",
+    percentage: 12,
+    color: "#136dec",
+    icon: Package,
+  },
+  {
+    stage: "Fully Completed",
+    count: 1090,
+    description: "All items handed over",
+    percentage: 85,
+    color: "#10b981",
+    icon: CheckCircle2,
+  },
 ];
 
 const recentResponses = [
@@ -153,6 +186,58 @@ function CustomPieTooltip({ active, payload }) {
   );
 }
 
+// NEW: Pipeline Stage Component (replaces collection status)
+function PipelineStage({ stage }) {
+  const Icon = stage.icon;
+  return (
+    <div className="space-y-2 sm:space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div
+            className="p-1.5 rounded-lg shrink-0"
+            style={{ backgroundColor: `${stage.color}20` }}
+          >
+            <Icon
+              size={12}
+              className="sm:hidden"
+              style={{ color: stage.color }}
+              strokeWidth={2.5}
+            />
+            <Icon
+              size={14}
+              className="hidden sm:block"
+              style={{ color: stage.color }}
+              strokeWidth={2}
+            />
+          </div>
+          <span className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+            {stage.stage}
+          </span>
+        </div>
+        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase shrink-0">
+          {stage.percentage}%
+        </span>
+      </div>
+      <div className="h-4 sm:h-5 w-full rounded-lg overflow-hidden bg-slate-100">
+        <div
+          className="h-full rounded-lg transition-all duration-500"
+          style={{ width: `${stage.percentage}%`, backgroundColor: stage.color }}
+        />
+      </div>
+      <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-bold">
+        <div className="flex items-center gap-1 sm:gap-1.5" style={{ color: stage.color }}>
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: stage.color }}
+          />
+          {stage.count.toLocaleString()} submissions
+        </div>
+        <span className="text-slate-400 font-medium">{stage.description}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -165,7 +250,7 @@ export default function Dashboard() {
             Dashboard Overview
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">
-            Real-time school financial performance and response tracking.
+            Track payment verification and item handover progress in real-time.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -181,11 +266,6 @@ export default function Dashboard() {
       </div>
 
       {/* ── Stat cards ──────────────────────────────────────────────────────── */}
-      {/*
-        xs phones : 2 cols — compact but readable, big number still punches
-        sm tablets: 2 cols with more padding
-        lg desktop: 4 cols
-      */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
         {statCards.map((card) => (
           <div
@@ -235,7 +315,6 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-          {/* Height wrapper — shorter on phones, full on desktop */}
           <div className="h-36 sm:h-44 lg:h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -263,11 +342,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Donut chart
-            Shape is UNCHANGED from the original (innerRadius=55, outerRadius=80, height=180).
-            On small screens we scale the container down and reduce text sizes so
-            it fits without distorting the ring shape.
-        */}
+        {/* Donut chart */}
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
           <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">
             Revenue Breakdown
@@ -276,13 +351,6 @@ export default function Dashboard() {
             Distribution by Fee Type
           </p>
 
-          {/*
-            Donut wrapper:
-            - phones (< sm): h-[150px] — ring is slightly smaller but same proportions
-            - sm tablets:     h-[165px]
-            - lg desktop:     h-[180px] — original size
-            The relative wrapper + absolute center label pattern is the same as the original.
-          */}
           <div className="relative h-[150px] sm:h-[165px] lg:h-[180px] mb-4 sm:mb-5 lg:mb-6">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -302,7 +370,6 @@ export default function Dashboard() {
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
-                {/* Desktop-size ring — hidden on phones */}
                 <Pie
                   data={revenueBreakdown}
                   cx="50%"
@@ -322,7 +389,6 @@ export default function Dashboard() {
                 <Tooltip content={<CustomPieTooltip />} />
               </PieChart>
             </ResponsiveContainer>
-            {/* Center label — text scales down on small screens */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
                 Total
@@ -355,50 +421,22 @@ export default function Dashboard() {
 
       {/* ── Charts row 2 ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-        {/* Collection status */}
+        {/* NEW: Payment-to-Handover Pipeline (replaces Collection Status) */}
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
           <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">
-            Collection Status
+            Payment-to-Handover Pipeline
           </h4>
           <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">
-            Paid vs Outstanding by Section
+            Track submissions through verification to completion
           </p>
           <div className="space-y-6 sm:space-y-7 lg:space-y-8">
-            {collectionStatus.map((item) => (
-              <div key={item.section} className="space-y-2 sm:space-y-2.5">
-                <div className="flex items-end justify-between gap-2">
-                  <span className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
-                    {item.section}
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase shrink-0">
-                    {item.collected}% Collected
-                  </span>
-                </div>
-                <div className="h-4 sm:h-5 w-full rounded-lg overflow-hidden bg-slate-100">
-                  <div
-                    className="bg-[#136dec] h-full rounded-lg transition-all duration-500"
-                    style={{ width: `${item.collected}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[9px] sm:text-[10px] font-bold">
-                  <div className="flex items-center gap-1 sm:gap-1.5 text-[#136dec]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#136dec]" />
-                    PAID: {item.amount}
-                  </div>
-                  <div className="flex items-center gap-1 sm:gap-1.5 text-rose-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    DUE: {item.due}
-                  </div>
-                </div>
-              </div>
+            {pipelineStatus.map((stage, index) => (
+              <PipelineStage key={stage.stage} stage={stage} index={index} />
             ))}
           </div>
         </div>
 
-        {/* Recent responses
-            Mobile: card list (much better UX than a squashed table)
-            md+:    full table
-        */}
+        {/* Recent responses */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 overflow-hidden">
           <div className="px-4 sm:px-5 lg:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between">
             <h4 className="font-bold text-slate-900 text-sm sm:text-base">Recent Responses</h4>

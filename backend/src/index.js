@@ -18,6 +18,7 @@ import itemRoutes from "./routes/item.route.js";
 import roleRoutes from "./routes/role.route.js";
 import paymentRecordRoutes from "./routes/payment-record.route.js";
 import userRoutes from "./routes/user.route.js";
+import dashboardRoutes from "./routes/dashboard.route.js";
 
 const allowedOrigins = [
   "http://localhost:5173", // main frontend (admin + staff)
@@ -59,6 +60,7 @@ app.use("/item", itemRoutes);
 app.use("/role", roleRoutes);
 app.use("/payment-records", paymentRecordRoutes);
 app.use("/users", userRoutes);
+app.use("/dashboard", dashboardRoutes);
 
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);
