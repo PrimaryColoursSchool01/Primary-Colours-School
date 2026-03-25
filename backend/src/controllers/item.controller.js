@@ -1,123 +1,148 @@
 import Item from "../models/items-fess.model.js";
-import Class from "../models/class.model.js"
+import Section from "../models/section.model.js";
+import Class from "../models/class.model.js";
+import Role from "../models/role.model.js";
+
+// ─── Helper: Transform item for frontend ─────────────────────────────────────
+
+function transformItemForFrontend(item) {
+  return {
+    _id: item._id,
+    name: item.name,
+    price: item.price,
+    compulsory: item.compulsory,
+    scope: item.scope,
+    sectionId: item.sectionId?._id || null,
+    sectionName: item.sectionId?.name || "All Sections",
+    classIds: item.classIds?.map((c) => c._id) || [],
+    classNames: item.classIds?.map((c) => c.name) || [],
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+// ─── Get All Items ───────────────────────────────────────────────────────────
+
 export const getAllItems = async (req, res, next) => {
   try {
-    const items = await Item.find({}).populate("sectionId").populate("classIds");
-    return res.status(200).json({ 
-  message: "Items fetched successfully", 
-  items 
-});
+    const items = await Item.find({}).populate("sectionId", "name").populate("classIds", "name").sort({ createdAt: -1 });
+
+    const transformedItems = items.map(transformItemForFrontend);
+
+    return res.status(200).json({
+      success: true,
+      message: "Items fetched successfully",
+      data: transformedItems,
+    });
   } catch (error) {
     console.error("Error fetching items:", error);
-    if (!error.statusCode) error.statusCode = 500;
     next(error);
   }
 };
 
+// ─── Create Item ─────────────────────────────────────────────────────────────
+
 export const createItem = async (req, res, next) => {
-  const { name, price, compulsory, selectionType, sectionId, classIds } = req.body;
-  if (!name || !price || !selectionType) {
-    const err = new Error("Name, price, and selection type are required");
+  const { name, price, compulsory, scope, sectionId, classIds } = req.body;
+
+  // Validation: Name
+  if (!name || name.trim().length < 2) {
+    const err = new Error("Item name must be at least 2 characters");
     err.statusCode = 400;
     return next(err);
   }
 
-  if (isNaN(price) || price < 0) {
+  // Validation: Price
+  if (price === undefined || isNaN(price) || price < 0) {
     const err = new Error("Price must be a valid positive number");
     err.statusCode = 400;
     return next(err);
   }
 
-  let scope;
-  let finalSectionId;
+  // Validation: Scope
+  if (!scope || !["global", "section", "class"].includes(scope)) {
+    const err = new Error("Invalid scope. Must be: global, section, or class");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  // Scope-dependent validation
+  let finalSectionId = null;
   let finalClassIds = [];
 
-  // Determine scope based on admin selection
-  switch (selectionType) {
-    case "all-sections":
-      scope = "global";
-      break;
-    case "section-all-classes":
-      scope = "section";
-      if (!sectionId) {
-        const err = new Error("Section ID is required for specific all classes");
-        err.statusCode = 400;
-        return next(err);
-      }
-      finalSectionId = sectionId;
-      break;
-    case "section-specific-classes":
-      scope = "class";
-      if (!sectionId) {
-        const err = new Error("Section ID is required for section specific classes");
-        err.statusCode = 400;
-        return next(err);
-      }
-      if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
-        const err = new Error("At least one class ID is required for section specific classes");
-        err.statusCode = 400;
-        return next(err);
-      }
-      finalSectionId = sectionId;
-      finalClassIds = classIds;
-      break;
-    default:
-      const err = new Error("Invalid selection type");
+  if (scope === "section" || scope === "class") {
+    if (!sectionId) {
+      const err = new Error("Section ID is required for section/class scope");
       err.statusCode = 400;
       return next(err);
+    }
+    finalSectionId = sectionId;
+  }
+
+  if (scope === "class") {
+    if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
+      const err = new Error("At least one class ID is required for class scope");
+      err.statusCode = 400;
+      return next(err);
+    }
+    finalClassIds = classIds;
   }
 
   try {
     const newItem = await Item.create({
-      name,
-      price,
+      name: name.trim(),
+      price: Number(price),
       compulsory: compulsory || false,
       scope,
       sectionId: finalSectionId,
       classIds: finalClassIds,
     });
-    return res.status(201).json({ message: "Item created successfully", item: newItem });
+
+    const populatedItem = await Item.findById(newItem._id).populate("sectionId", "name").populate("classIds", "name");
+
+    return res.status(201).json({
+      success: true,
+      message: "Item created successfully",
+      data: transformItemForFrontend(populatedItem),
+    });
   } catch (error) {
     console.error("Error creating item:", error);
-    if (!error.statusCode) error.statusCode = 500;
     next(error);
   }
 };
 
+// ─── Get Item By ID ──────────────────────────────────────────────────────────
+
 export const getItemById = async (req, res, next) => {
   const { id } = req.params;
-  if (!id) {
-    const err = new Error("Item ID is required");
-    err.statusCode = 400;
-    return next(err);
-  }
+
   try {
-    const item = await Item.findById(id).populate("sectionId").populate("classIds");
+    const item = await Item.findById(id).populate("sectionId", "name").populate("classIds", "name");
+
     if (!item) {
       const err = new Error("Item not found");
       err.statusCode = 404;
       return next(err);
     }
-    return res.status(200).json({ message: "Item fetched successfully", item });
+
+    return res.status(200).json({
+      success: true,
+      message: "Item fetched successfully",
+      data: transformItemForFrontend(item),
+    });
   } catch (error) {
     console.error("Error fetching item:", error);
-    if (!error.statusCode) error.statusCode = 500;
-    return next(error);
+    next(error);
   }
 };
 
+// ─── Update Item By ID ───────────────────────────────────────────────────────
+
 export const updateItemById = async (req, res, next) => {
   const { id } = req.params;
-  const { name, price, compulsory, selectionType, sectionId, classIds } = req.body;
-
-  if (!id) {
-    const err = new Error("Item ID is required");
-    err.statusCode = 400;
-    return next(err);
-  }
+  const { name, price, compulsory, scope, sectionId, classIds } = req.body;
 
   try {
-    // Fetch the current item to determine what properties are being updated
     const currentItem = await Item.findById(id);
     if (!currentItem) {
       const err = new Error("Item not found");
@@ -125,12 +150,17 @@ export const updateItemById = async (req, res, next) => {
       return next(err);
     }
 
-    // Build the update object dynamically with only provided fields
     const updateData = {};
 
-    // Validate and add basic fields if provided
+    // ── Basic Fields Validation ──────────────────────────────────────────────
+
     if (name !== undefined) {
-      updateData.name = name;
+      if (name.trim().length < 2) {
+        const err = new Error("Item name must be at least 2 characters");
+        err.statusCode = 400;
+        return next(err);
+      }
+      updateData.name = name.trim();
     }
 
     if (price !== undefined) {
@@ -139,61 +169,57 @@ export const updateItemById = async (req, res, next) => {
         err.statusCode = 400;
         return next(err);
       }
-      updateData.price = price;
+      updateData.price = Number(price);
     }
 
     if (compulsory !== undefined) {
+      if (typeof compulsory !== "boolean") {
+        const err = new Error("Compulsory must be a boolean");
+        err.statusCode = 400;
+        return next(err);
+      }
       updateData.compulsory = compulsory;
     }
 
-    // Validate scope-dependent fields only when selectionType is provided or changed
-    if (selectionType !== undefined) {
-      let scope;
-      let finalSectionId = null;
-      let finalClassIds = [];
+    // ── Scope-Dependent Validation ────────────────────
 
-      switch (selectionType) {
-        case "all-sections":
-          scope = "global";
-          finalSectionId = null;
-          finalClassIds = [];
-          break;
-        case "section-all-classes":
-          scope = "section";
-          if (!sectionId) {
-            const err = new Error("Section ID is required for section-all-classes");
-            err.statusCode = 400;
-            return next(err);
-          }
-          finalSectionId = sectionId;
-          finalClassIds = [];
-          break;
-        case "section-specific-classes":
-          scope = "class";
-          if (!sectionId) {
-            const err = new Error("Section ID is required for section-specific-classes");
-            err.statusCode = 400;
-            return next(err);
-          }
-          if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
-            const err = new Error("At least one class ID is required for section-specific-classes");
-            err.statusCode = 400;
-            return next(err);
-          }
-          finalSectionId = sectionId;
-          finalClassIds = classIds;
-          break;
-        default:
-          const err = new Error("Invalid selection type");
-          err.statusCode = 400;
-          return next(err);
+    if (scope !== undefined) {
+      // Validate scope value
+      if (!["global", "section", "class"].includes(scope)) {
+        const err = new Error("Invalid scope");
+        err.statusCode = 400;
+        return next(err);
       }
 
       updateData.scope = scope;
-      updateData.sectionId = finalSectionId;
-      updateData.classIds = finalClassIds;
+
+      if (scope === "global") {
+        updateData.sectionId = null;
+        updateData.classIds = [];
+      } else if (scope === "section") {
+        if (!sectionId) {
+          const err = new Error("Section ID required for section scope");
+          err.statusCode = 400;
+          return next(err);
+        }
+        updateData.sectionId = sectionId;
+        updateData.classIds = [];
+      } else if (scope === "class") {
+        if (!sectionId) {
+          const err = new Error("Section ID required for class scope");
+          err.statusCode = 400;
+          return next(err);
+        }
+        if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
+          const err = new Error("At least one class ID required for class scope");
+          err.statusCode = 400;
+          return next(err);
+        }
+        updateData.sectionId = sectionId;
+        updateData.classIds = classIds;
+      }
     } else {
-      // If selection type is not being changed, validate based on current scope
+      // Scope not changing - validate based on CURRENT scope
       if (currentItem.scope === "section" || currentItem.scope === "class") {
         if (sectionId !== undefined) {
           updateData.sectionId = sectionId;
@@ -201,7 +227,7 @@ export const updateItemById = async (req, res, next) => {
       }
       if (currentItem.scope === "class" && classIds !== undefined) {
         if (!Array.isArray(classIds) || classIds.length === 0) {
-          const err = new Error("At least one class ID is required for class scope items");
+          const err = new Error("At least one class ID required for class scope items");
           err.statusCode = 400;
           return next(err);
         }
@@ -209,44 +235,48 @@ export const updateItemById = async (req, res, next) => {
       }
     }
 
-    const updatedItem = await Item.findByIdAndUpdate(id, updateData, { new: true })
-      .populate("sectionId")
-      .populate("classIds");
+    const updatedItem = await Item.findByIdAndUpdate(id, updateData, { returnDocument: "after" })
+      .populate("sectionId", "name")
+      .populate("classIds", "name");
 
-    return res.status(200).json({ message: "Item updated successfully", item: updatedItem });
+    return res.status(200).json({
+      success: true,
+      message: "Item updated successfully",
+      data: transformItemForFrontend(updatedItem),
+    });
   } catch (error) {
     console.error("Error updating item:", error);
-    if (!error.statusCode) error.statusCode = 500;
-    return next(error);
+    next(error);
   }
 };
 
+// ─── Delete Item By ID ───────────────────────────────────────────────────────
+
 export const deleteItemById = async (req, res, next) => {
   const { id } = req.params;
-  if (!id) {
-    const err = new Error("Item ID is required");
-    err.statusCode = 400;
-    return next(err);
-  }
 
   try {
     const deletedItem = await Item.findByIdAndDelete(id);
+
     if (!deletedItem) {
       const err = new Error("Item not found");
       err.statusCode = 404;
       return next(err);
     }
 
-    // Pull the deleted item from all roles that reference it
+    // Cleanup: Remove item from all roles that reference it
     await Role.updateMany({ itemIds: id }, { $pull: { itemIds: id } });
 
-    // Delete roles that now have no items left
+    // Cleanup: Delete roles that now have no items left
     await Role.deleteMany({ itemIds: { $size: 0 } });
 
-    return res.status(200).json({ message: "Item deleted successfully", item: deletedItem });
+    return res.status(200).json({
+      success: true,
+      message: "Item deleted successfully",
+      data: transformItemForFrontend(deletedItem),
+    });
   } catch (error) {
     console.error("Error deleting item:", error);
-    if (!error.statusCode) error.statusCode = 500;
-    return next(error);
+    next(error);
   }
 };

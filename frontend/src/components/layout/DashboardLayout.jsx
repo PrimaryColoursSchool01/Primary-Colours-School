@@ -52,14 +52,14 @@ function SidebarContent({ onClose, onLogout }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/5">
+      <div className="px-5 py-5 border-b border-slate-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-[#136dec] rounded-lg flex items-center justify-center shrink-0">
               <GraduationCap size={16} className="text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-white text-sm font-bold leading-none tracking-tight">
+              <p className="text-slate-900 text-sm font-bold leading-none tracking-tight">
                 Primary Colours
               </p>
               <p className="text-slate-500 text-[10px] mt-0.5 font-medium uppercase tracking-wider">
@@ -71,7 +71,7 @@ function SidebarContent({ onClose, onLogout }) {
           {onClose && (
             <button
               onClick={onClose}
-              className="lg:hidden text-slate-500 hover:text-white transition-colors p-1"
+              className="lg:hidden text-slate-400 hover:text-slate-600 transition-colors p-1"
             >
               <X size={18} />
             </button>
@@ -83,7 +83,7 @@ function SidebarContent({ onClose, onLogout }) {
       <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5 custom-scrollbar">
         {navGroups.map((group) => (
           <div key={group.label}>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-600 px-3 mb-1.5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 px-3 mb-1.5">
               {group.label}
             </p>
             <ul className="space-y-0.5">
@@ -95,8 +95,8 @@ function SidebarContent({ onClose, onLogout }) {
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                         isActive
-                          ? "bg-[#136dec]/15 text-white border-l-[3px] border-[#136dec] pl-[9px]"
-                          : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                          ? "bg-[#136dec] text-white shadow-md shadow-[#136dec]/25"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                       }`
                     }
                   >
@@ -104,7 +104,7 @@ function SidebarContent({ onClose, onLogout }) {
                       <>
                         <item.icon
                           size={16}
-                          className={isActive ? "text-[#136dec]" : "text-slate-500"}
+                          className={isActive ? "text-white" : "text-slate-400"}
                           strokeWidth={2}
                         />
                         <span>{item.title}</span>
@@ -119,10 +119,10 @@ function SidebarContent({ onClose, onLogout }) {
       </nav>
 
       {/* Logout */}
-      <div className="px-3 py-4 border-t border-white/5">
+      <div className="px-3 py-4 border-t border-slate-200">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-rose-400 transition-all"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-all"
         >
           <LogOut size={16} strokeWidth={2} />
           <span>Logout</span>
@@ -151,7 +151,7 @@ export default function DashboardLayout() {
   const handleLogout = async () => {
     try {
       await logout();
-      clearAuth(); // Added missing clearAuth call
+      clearAuth();
     } catch {
       // proceed even if API call fails
     } finally {
@@ -163,7 +163,7 @@ export default function DashboardLayout() {
   return (
     <div className="flex h-dvh bg-[#f6f7f8] overflow-hidden">
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
-      <aside className="hidden lg:flex w-60 bg-[#0F172A] flex-col flex-shrink-0 h-full custom-scrollbar">
+      <aside className="hidden lg:flex w-60 bg-white border-r border-slate-200 flex-col flex-shrink-0 h-full custom-scrollbar">
         <SidebarContent onLogout={handleLogout} />
       </aside>
 
@@ -176,7 +176,7 @@ export default function DashboardLayout() {
             onClick={() => setSidebarOpen(false)}
           />
           {/* Drawer */}
-          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#0F172A] lg:hidden flex flex-col shadow-2xl custom-scrollbar">
+          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white lg:hidden flex flex-col shadow-2xl custom-scrollbar border-r border-slate-200">
             <SidebarContent onClose={() => setSidebarOpen(false)} onLogout={handleLogout} />
           </div>
         </>

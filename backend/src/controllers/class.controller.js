@@ -1,4 +1,5 @@
 import Class from "../models/class.model.js";
+import Item from "../models/items-fess.model.js";
 export const getAllClasses = async (req, res, next) => {
   try {
     const classes = await Class.find({}).populate("sectionId", "name").sort({ name: 1 });
@@ -73,10 +74,7 @@ export const updateClassById = async (req, res, next) => {
       err.statusCode = 400;
       return next(err);
     }
-    const updatedClass = await Class.findByIdAndUpdate(id, { name }, { new: true }).populate(
-      "sectionId",
-      "name",
-    );
+    const updatedClass = await Class.findByIdAndUpdate(id, { name }, { new: true }).populate("sectionId", "name");
     if (!updatedClass) {
       const err = new Error("Class not found");
       err.statusCode = 404;

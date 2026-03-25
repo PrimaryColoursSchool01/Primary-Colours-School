@@ -8,14 +8,13 @@ export const useAuthStore = create(
       accessToken: null,
 
       setAuth: (user, accessToken) => set({ user, accessToken }),
-
       setAccessToken: (accessToken) => set({ accessToken }),
-
       logout: () => set({ user: null, accessToken: null }),
     }),
     {
       name: "findora-auth",
-      partialize: (state) => ({ user: state.user }),
+      // Persist both user and accessToken
+      partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
     },
   ),
 );

@@ -12,10 +12,12 @@ const api = axios.create({
 // Attach access token to every request
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
-
+  console.log("Interceptor running for:", config.url);
+  console.log("Token:", token ? "exists" : "null");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log("Headers:", config.headers);
   return config;
 });
 
@@ -25,7 +27,6 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If this is a login request, do not attempt token refresh
     if (originalRequest.url?.includes("/auth/login")) {
       return Promise.reject(error);
     }
@@ -34,11 +35,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const { data } = await axios.post(
-          `${import.meta.env.VITE_API_URL}/auth/refresh-token`,
-          {},
-          { withCredentials: true },
-        );
+        const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/auth/refresh-token`, {}, { withCredentials: true });
 
         useAuthStore.getState().setAccessToken(data.accessToken);
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
