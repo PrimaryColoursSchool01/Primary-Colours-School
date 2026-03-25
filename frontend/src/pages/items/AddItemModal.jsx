@@ -62,14 +62,11 @@ export default function AddItemModal({ open, onOpenChange, onSubmit, editingItem
     },
   });
 
-  // ✅ Load data AND reset form when modal opens OR editingItem changes
   useEffect(() => {
     if (open) {
       loadData();
 
-      // ✅ Wait for data to load, then reset form with editingItem values
       if (editingItem) {
-        // ✅ Wait a tick for sections/classes to load
         setTimeout(() => {
           reset({
             name: editingItem.name || "",
@@ -80,15 +77,11 @@ export default function AddItemModal({ open, onOpenChange, onSubmit, editingItem
             classIds: editingItem.classIds || [],
           });
 
-          // ✅ Also update local state for UI controls
           setSelectedScope(editingItem.scope || "global");
           setSelectedSection(editingItem.sectionId || "");
           setSelectedClassIds(editingItem.classIds || []);
-
-          console.log("✅ Form reset with editingItem:", editingItem);
         }, 100);
       } else {
-        // ✅ Clear form for new item
         reset({
           name: "",
           price: 0,
@@ -101,8 +94,6 @@ export default function AddItemModal({ open, onOpenChange, onSubmit, editingItem
         setSelectedScope("global");
         setSelectedSection("");
         setSelectedClassIds([]);
-
-        console.log("✅ Form reset for new item");
       }
     }
   }, [open, editingItem]);
@@ -113,12 +104,7 @@ export default function AddItemModal({ open, onOpenChange, onSubmit, editingItem
 
       const sectionsRes = await getSections();
 
-      console.log("📦 Sections Response:", sectionsRes);
-
       const sectionsData = sectionsRes?.sections || sectionsRes?.data?.sections || [];
-
-      console.log("✅ Parsed Sections:", sectionsData);
-      console.log("✅ Sections Count:", sectionsData.length);
 
       setSections(sectionsData);
 
@@ -130,7 +116,6 @@ export default function AddItemModal({ open, onOpenChange, onSubmit, editingItem
         }));
       });
 
-      console.log("✅ Classes Count:", allClasses.length);
       setClasses(allClasses);
     } catch (error) {
       console.error("Failed to load ", error);

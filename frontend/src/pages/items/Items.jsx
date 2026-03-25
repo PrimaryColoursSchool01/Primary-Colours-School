@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, Database, Cloud, AlertTriangle, X } from "lucide-react";
+import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,64 +7,7 @@ import { getAllItems, createItem, updateItem, deleteItem } from "@/services/item
 import AddItemModal from "./AddItemModal";
 import { toast } from "sonner";
 
-// ─── Mock data (For Demo/Screenshots) ────────────────────────────────────────
-
-const mockItems = [
-  {
-    _id: "mock_001",
-    name: "Tuition Fee",
-    scope: "global",
-    sectionName: "All Sections",
-    classNames: [],
-    price: 150000,
-    compulsory: true,
-  },
-  {
-    _id: "mock_002",
-    name: "Primary 1 Textbooks",
-    scope: "class",
-    sectionName: "Primary",
-    classNames: ["P1-A", "P1-B"],
-    price: 35500,
-    compulsory: true,
-  },
-  {
-    _id: "mock_003",
-    name: "School Bus Service",
-    scope: "section",
-    sectionName: "Nursery",
-    classNames: [],
-    price: 45000,
-    compulsory: false,
-  },
-  {
-    _id: "mock_004",
-    name: "PTA Levy",
-    scope: "global",
-    sectionName: "All Sections",
-    classNames: [],
-    price: 10000,
-    compulsory: true,
-  },
-  {
-    _id: "mock_005",
-    name: "Sports Wear (Full Set)",
-    scope: "section",
-    sectionName: "Secondary",
-    classNames: [],
-    price: 12500,
-    compulsory: false,
-  },
-  {
-    _id: "mock_006",
-    name: "Exam Fee",
-    scope: "class",
-    sectionName: "Secondary",
-    classNames: ["JSS 1-A", "JSS 1-B", "JSS 1-C", "JSS 2-A", "JSS 2-B", "JSS 3-A", "JSS 3-B", "SS 1-A"],
-    price: 25000,
-    compulsory: true,
-  },
-];
+// ─── Tabs ────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: "all", label: "All Items" },
@@ -248,28 +191,20 @@ export default function Items() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ─── Mock Data Toggle ──────────────────────────────────────────────────────
-  const [useMockData, setUseMockData] = useState(true);
-
   // ─── Load Items on Mount ───────────────────────────────────────────────────
   useEffect(() => {
     loadItems();
-  }, [useMockData]);
+  }, []);
 
   const loadItems = async () => {
     try {
       setLoading(true);
-
-      if (useMockData) {
-        setItems(mockItems);
-      } else {
-        const response = await getAllItems();
-        setItems(response.data || []);
-      }
+      const response = await getAllItems();
+      setItems(response.data || []);
     } catch (error) {
       console.error("Failed to load items:", error);
-      toast.error("Failed to load items");
-      setItems(mockItems);
+      toast.error(error.response?.data?.message || "Failed to load items");
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -279,18 +214,9 @@ export default function Items() {
 
   const handleAddItem = async (itemData) => {
     try {
-      if (useMockData) {
-        const newItem = {
-          _id: `mock_${Date.now()}`,
-          ...itemData,
-        };
-        setItems([newItem, ...items]);
-        toast.success("Item created successfully (Mock)");
-      } else {
-        await createItem(itemData);
-        await loadItems();
-        toast.success("Item created successfully");
-      }
+      await createItem(itemData);
+      await loadItems();
+      toast.success("Item created successfully");
       setModalOpen(false);
     } catch (error) {
       console.error("Failed to create item:", error);
@@ -301,14 +227,9 @@ export default function Items() {
 
   const handleEditItem = async (itemData) => {
     try {
-      if (useMockData) {
-        setItems(items.map((item) => (item._id === editingItem._id ? { ...item, ...itemData } : item)));
-        toast.success("Item updated successfully (Mock)");
-      } else {
-        await updateItem(editingItem._id, itemData);
-        await loadItems();
-        toast.success("Item updated successfully");
-      }
+      await updateItem(editingItem._id, itemData);
+      await loadItems();
+      toast.success("Item updated successfully");
       setEditingItem(null);
       setModalOpen(false);
     } catch (error) {
@@ -328,16 +249,9 @@ export default function Items() {
 
     try {
       setIsDeleting(true);
-
-      if (useMockData) {
-        setItems(items.filter((item) => item._id !== itemToDelete._id));
-        toast.success("Item deleted successfully (Mock)");
-      } else {
-        await deleteItem(itemToDelete._id);
-        await loadItems();
-        toast.success("Item deleted successfully");
-      }
-
+      await deleteItem(itemToDelete._id);
+      await loadItems();
+      toast.success("Item deleted successfully");
       setDeleteModalOpen(false);
       setItemToDelete(null);
     } catch (error) {
@@ -633,43 +547,6 @@ export default function Items() {
                 <p className="text-[10px] font-bold text-purple-900">By Class</p>
                 <p className="text-[9px] text-purple-700">Applies to specific classes only (e.g., JSS 1-A, JSS 1-B)</p>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Data Source Toggle ─────────────────────────────────────────────── */}
-        <div className="fixed bottom-6 right-6 z-50">
-          <div className="bg-slate-900 text-white rounded-xl shadow-2xl shadow-slate-900/50 p-4 border border-slate-700">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`p-2 rounded-lg transition-colors ${
-                    useMockData ? "bg-amber-500/20 text-amber-400" : "bg-slate-700 text-slate-400"
-                  }`}
-                >
-                  <Database size={16} />
-                </div>
-                <div
-                  className={`p-2 rounded-lg transition-colors ${
-                    !useMockData ? "bg-[#136dec]/20 text-[#136dec]" : "bg-slate-700 text-slate-400"
-                  }`}
-                >
-                  <Cloud size={16} />
-                </div>
-              </div>
-              <div className="h-8 w-px bg-slate-700" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Source</span>
-                <span className="text-xs font-semibold">{useMockData ? "Mock Data" : "Live API"}</span>
-              </div>
-              <button
-                onClick={() => setUseMockData(!useMockData)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${useMockData ? "bg-amber-500" : "bg-[#136dec]"}`}
-              >
-                <span
-                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${useMockData ? "left-1" : "left-7"}`}
-                />
-              </button>
             </div>
           </div>
         </div>
