@@ -2,19 +2,15 @@ import Section from "../models/section.model.js";
 import Class from "../models/class.model.js";
 import Item from "../models/items-fess.model.js";
 
-
 export const getAllSections = async (req, res, next) => {
   try {
-    const sections = await Section.find({}).sort({ name: 1 }).lean();
+    const sections = await Section.find({}).select("name createdAt").sort({ name: 1 }).lean();
 
     const sectionsWithClasses = await Promise.all(
       sections.map(async (section) => {
-        const classes = await Class.find({ sectionId: section._id })
-          .sort({ name: 1 })
-          .select("_id name")
-          .lean();
+        const classes = await Class.find({ sectionId: section._id }).sort({ name: 1 }).select("_id name").lean();
         return { ...section, classes };
-      })
+      }),
     );
 
     return res.status(200).json({
@@ -90,9 +86,7 @@ export const updateSectionById = async (req, res, next) => {
       err.statusCode = 404;
       return next(err);
     }
-    return res
-      .status(200)
-      .json({ message: "Section updated successfully", section: updatedSection });
+    return res.status(200).json({ message: "Section updated successfully", section: updatedSection });
   } catch (error) {
     console.error("Error updating section:", error);
     if (!error.statusCode) error.statusCode = 500;
@@ -121,9 +115,7 @@ export const deleteSectionById = async (req, res, next) => {
     // Delete all items scoped to this section (section and class scoped)
     await Item.deleteMany({ sectionId: id });
 
-    return res
-      .status(200)
-      .json({ message: "Section deleted successfully", section: deletedSection });
+    return res.status(200).json({ message: "Section deleted successfully", section: deletedSection });
   } catch (error) {
     console.error("Error deleting section:", error);
     return next(error);
