@@ -8,67 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { getAllClasses, createClass, updateClass, deleteClass, getAllSections } from "@/services/classes.service";
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-
-const mockClasses = [
-  {
-    _id: "cls_001",
-    name: "Nursery 1",
-    sectionId: "sec_001",
-    sectionName: "Nursery",
-    createdAt: "2024-01-10T10:00:00.000Z",
-  },
-  {
-    _id: "cls_002",
-    name: "Nursery 2",
-    sectionId: "sec_001",
-    sectionName: "Nursery",
-    createdAt: "2024-01-10T10:00:00.000Z",
-  },
-  {
-    _id: "cls_003",
-    name: "Primary 1",
-    sectionId: "sec_002",
-    sectionName: "Primary",
-    createdAt: "2024-01-12T10:00:00.000Z",
-  },
-  {
-    _id: "cls_004",
-    name: "Primary 2",
-    sectionId: "sec_002",
-    sectionName: "Primary",
-    createdAt: "2024-01-12T10:00:00.000Z",
-  },
-  {
-    _id: "cls_005",
-    name: "Primary 3",
-    sectionId: "sec_002",
-    sectionName: "Primary",
-    createdAt: "2024-01-12T10:00:00.000Z",
-  },
-  {
-    _id: "cls_006",
-    name: "JSS 1",
-    sectionId: "sec_003",
-    sectionName: "Secondary",
-    createdAt: "2024-01-15T10:00:00.000Z",
-  },
-  {
-    _id: "cls_007",
-    name: "JSS 2",
-    sectionId: "sec_003",
-    sectionName: "Secondary",
-    createdAt: "2024-01-15T10:00:00.000Z",
-  },
-  {
-    _id: "cls_008",
-    name: "JSS 3",
-    sectionId: "sec_003",
-    sectionName: "Secondary",
-    createdAt: "2024-01-15T10:00:00.000Z",
-  },
-];
+// ─── Section Badge Colors ────────────────────────────────────────────────────
 
 const SECTION_COLORS = {
   Nursery: { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
@@ -289,16 +231,30 @@ export default function Classes() {
   const loadData = async () => {
     try {
       setLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setClasses(mockClasses);
-      setSections([
-        { _id: "sec_001", name: "Nursery" },
-        { _id: "sec_002", name: "Primary" },
-        { _id: "sec_003", name: "Secondary" },
-      ]);
+      const [classesRes, sectionsRes] = await Promise.all([getAllClasses(), getAllSections()]);
+
+      // Map classes to include sectionName
+      const classesData = (classesRes.classes || []).map((cls) => ({
+        _id: cls._id,
+        name: cls.name,
+        sectionId: cls.sectionId?._id || cls.sectionId,
+        sectionName: cls.sectionId?.name || "Unknown",
+        createdAt: cls.createdAt || new Date().toISOString(),
+      }));
+
+      // Map sections (from nested structure or flat)
+      const sectionsData = (sectionsRes.sections || sectionsRes || []).map((section) => ({
+        _id: section._id,
+        name: section.name,
+      }));
+
+      setClasses(classesData);
+      setSections(sectionsData);
     } catch (error) {
-      console.error("Failed to load data:", error);
+      console.error("Failed to load ", error);
       toast.error(error.response?.data?.message || "Failed to load data");
+      setClasses([]);
+      setSections([]);
     } finally {
       setLoading(false);
     }
@@ -308,15 +264,8 @@ export default function Classes() {
 
   const handleAddClass = async (classData) => {
     try {
-      const section = sections.find((s) => s._id === classData.sectionId);
-      const newClass = {
-        _id: `cls_${Date.now()}`,
-        name: classData.name,
-        sectionId: classData.sectionId,
-        sectionName: section?.name || "Unknown",
-        createdAt: new Date().toISOString(),
-      };
-      setClasses([newClass, ...classes]);
+      await createClass(classData);
+      await loadData();
       toast.success("Class created successfully");
     } catch (error) {
       console.error("Failed to create class:", error);
@@ -327,10 +276,8 @@ export default function Classes() {
 
   const handleEditClass = async (classData) => {
     try {
-      const section = sections.find((s) => s._id === classData.sectionId);
-      setClasses(
-        classes.map((cls) => (cls._id === editingClass._id ? { ...cls, ...classData, sectionName: section?.name || "Unknown" } : cls)),
-      );
+      await updateClass(editingClass._id, classData);
+      await loadData();
       toast.success("Class updated successfully");
       setEditingClass(null);
     } catch (error) {
@@ -350,7 +297,8 @@ export default function Classes() {
 
     try {
       setIsDeleting(true);
-      setClasses(classes.filter((cls) => cls._id !== classToDelete._id));
+      await deleteClass(classToDelete._id);
+      await loadData();
       toast.success("Class deleted successfully");
       setDeleteModalOpen(false);
       setClassToDelete(null);
@@ -543,7 +491,6 @@ export default function Classes() {
                             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#136dec]/10 flex items-center justify-center text-[#136dec] shrink-0">
                               <BookOpen size={18} />
                             </div>
-                            {/* ✅ Responsive text size */}
                             <span className="font-semibold text-xs sm:text-sm md:text-base">{cls.name}</span>
                           </div>
                         </td>
@@ -556,14 +503,12 @@ export default function Classes() {
                         </td>
                         <td className="px-4 sm:px-6 py-4 sm:py-5 text-slate-600 hidden md:table-cell">
                           <div className="flex items-center gap-2">
-                            {/* ✅ Responsive text size */}
                             <span className="text-xs sm:text-sm">{formatDate(cls.createdAt)}</span>
                           </div>
                         </td>
                         <td className="px-4 sm:px-6 py-4 sm:py-5 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              {/* ✅ Always visible (removed opacity-0 group-hover:opacity-100) */}
                               <button className="p-2 text-slate-400 hover:text-[#136dec] hover:bg-slate-50 rounded transition-colors">
                                 <MoreVertical size={16} />
                               </button>
