@@ -50,8 +50,6 @@ const SCOPE_CONFIG = {
 
 // ─── Add/Edit Role Modal ─────────────────────────────────────────────────────
 
-// ─── Add/Edit Role Modal ─────────────────────────────────────────────────────
-
 function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classes, items }) {
   const [name, setName] = useState("");
   const [selectionType, setSelectionType] = useState("all-sections");
@@ -120,23 +118,16 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
 
   const filteredClasses = classes.filter((cls) => !sectionId || cls.sectionId === sectionId || cls.sectionId?._id === sectionId);
 
-  //  FILTER ITEMS BASED ON SCOPE
   const filteredItems = items.filter((item) => {
-    // School-Wide: Only show global items
     if (selectionType === "all-sections") {
       return item.scope === "global";
     }
-
-    // By Section: Only show section items matching this section
     if (selectionType === "section-all-classes") {
       return item.scope === "section" && (item.sectionId === sectionId || item.sectionId?._id === sectionId);
     }
-
-    // By Class: Only show class items matching selected classes
     if (selectionType === "section-specific-classes") {
       return item.scope === "class" && item.classIds?.some((id) => selectedClassIds.includes(id));
     }
-
     return true;
   });
 
@@ -152,13 +143,16 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col p-0 gap-0">
-        {/* Header - Fixed at top */}
-        <DialogHeader className="p-4 sm:p-6 border-b border-slate-200 shrink-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <DialogTitle className="text-base font-bold text-slate-900">{editingRole ? "Edit Role" : "Add New Role"}</DialogTitle>
-              <DialogDescription className="text-xs text-slate-500 mt-1">
+      {/* ✅ Mobile-optimized modal width */}
+      <DialogContent className="sm:max-w-[600px] max-w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="p-3 sm:p-6 border-b border-slate-200 shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-sm sm:text-base font-bold text-slate-900">
+                {editingRole ? "Edit Role" : "Add New Role"}
+              </DialogTitle>
+              <DialogDescription className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">
                 {editingRole ? "Update the role configuration." : "Create a new staff role with specific permissions."}
               </DialogDescription>
             </div>
@@ -166,78 +160,78 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
-              className="h-7 w-7 text-slate-400 hover:text-slate-600 shrink-0"
+              className="h-6 w-6 sm:h-7 sm:w-7 text-slate-400 hover:text-slate-600 shrink-0"
             >
-              <X size={14} />
+              <X size={12} className="sm:size-14" />
             </Button>
           </div>
         </DialogHeader>
 
-        {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Role Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-semibold text-slate-700">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="name" className="text-xs sm:text-sm font-semibold text-slate-700">
                 Role Name
               </Label>
               <Input
                 id="name"
-                placeholder="e.g. Primary Bursar, Exam Officer"
+                placeholder="e.g. Primary Bursar"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11"
+                className="h-9 sm:h-11 text-sm"
                 autoFocus
               />
             </div>
 
-            {/* Scope Selection */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-slate-700">Scope</Label>
+            {/* Scope Selection - Stack on mobile */}
+            <div className="space-y-2 sm:space-y-3">
+              <Label className="text-xs sm:text-sm font-semibold text-slate-700">Scope</Label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setSelectionType("all-sections")}
-                  className={`p-3 rounded-lg border text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
                     selectionType === "all-sections"
                       ? "bg-[#136dec] text-white border-[#136dec]"
                       : "bg-white text-slate-600 border-slate-200 hover:border-[#136dec]"
                   }`}
                 >
-                  <Globe size={16} className="mx-auto mb-1" />
-                  School-Wide
+                  <Globe size={14} className="sm:size-16" />
+                  <span className="whitespace-nowrap">School-Wide</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectionType("section-all-classes")}
-                  className={`p-3 rounded-lg border text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
                     selectionType === "section-all-classes"
                       ? "bg-[#136dec] text-white border-[#136dec]"
                       : "bg-white text-slate-600 border-slate-200 hover:border-[#136dec]"
                   }`}
                 >
-                  <Folder size={16} className="mx-auto mb-1" />
-                  By Section
+                  <Folder size={14} className="sm:size-16" />
+                  <span className="whitespace-nowrap">By Section</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectionType("section-specific-classes")}
-                  className={`p-3 rounded-lg border text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
                     selectionType === "section-specific-classes"
                       ? "bg-[#136dec] text-white border-[#136dec]"
                       : "bg-white text-slate-600 border-slate-200 hover:border-[#136dec]"
                   }`}
                 >
-                  <GraduationCap size={16} className="mx-auto mb-1" />
-                  By Class
+                  <GraduationCap size={14} className="sm:size-16" />
+                  <span className="whitespace-nowrap">By Class</span>
                 </button>
               </div>
             </div>
 
             {/* Section Selector */}
             {(selectionType === "section-all-classes" || selectionType === "section-specific-classes") && (
-              <div className="space-y-2">
-                <Label htmlFor="section" className="text-sm font-semibold text-slate-700">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="section" className="text-xs sm:text-sm font-semibold text-slate-700">
                   Section
                 </Label>
                 <Select
@@ -249,10 +243,10 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
                     }
                   }}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-9 sm:h-11 text-sm">
                     <SelectValue placeholder="Select a section" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="text-sm">
                     {sections.map((section) => (
                       <SelectItem key={section._id} value={section._id}>
                         {section.name}
@@ -265,23 +259,26 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
 
             {/* Class Selector */}
             {selectionType === "section-specific-classes" && sectionId && (
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold text-slate-700">Classes</Label>
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Label className="text-xs sm:text-sm font-semibold text-slate-700">Classes</Label>
+                  <Badge variant="secondary" className="text-[9px] sm:text-[10px]">
                     {selectedClassIds.length} selected
                   </Badge>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-40 overflow-y-auto">
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 sm:p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-36 sm:max-h-40 overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                     {filteredClasses.map((cls) => (
-                      <label key={cls._id} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-white">
+                      <label
+                        key={cls._id}
+                        className="flex items-center gap-1.5 sm:gap-2 cursor-pointer p-1.5 sm:p-2 rounded hover:bg-white"
+                      >
                         <Checkbox
                           checked={selectedClassIds.includes(cls._id)}
                           onCheckedChange={() => handleClassToggle(cls._id)}
-                          className="h-4 w-4"
+                          className="h-3.5 w-3.5 sm:h-4 sm:w-4"
                         />
-                        <span className="text-xs text-slate-700">{cls.name}</span>
+                        <span className="text-[10px] sm:text-xs text-slate-700 truncate">{cls.name}</span>
                       </label>
                     ))}
                   </div>
@@ -291,50 +288,53 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
 
             <Separator />
 
-            {/* Fee Items Selector - FILTERED BY SCOPE */}
-            <div className="space-y-3">
+            {/* Fee Items Selector */}
+            <div className="space-y-2 sm:space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold text-slate-700">Fee Items (Required)</Label>
-                <Badge variant="secondary" className="text-[10px]">
+                <Label className="text-xs sm:text-sm font-semibold text-slate-700">Fee Items (Required)</Label>
+                <Badge variant="secondary" className="text-[9px] sm:text-[10px]">
                   {selectedItemIds.length} selected
                 </Badge>
               </div>
 
-              {/* Show info about filtered items */}
+              {/* Info messages */}
               {selectionType === "all-sections" && (
-                <p className="text-[10px] text-blue-700 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                <p className="text-[9px] sm:text-[10px] text-blue-700 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-blue-200">
                   Only school-wide fee items are available for this scope.
                 </p>
               )}
               {selectionType === "section-all-classes" && sectionId && (
-                <p className="text-[10px] text-blue-700 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                <p className="text-[9px] sm:text-[10px] text-blue-700 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-blue-200">
                   Only fee items for this section are available.
                 </p>
               )}
               {selectionType === "section-specific-classes" && sectionId && (
-                <p className="text-[10px] text-blue-700 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                <p className="text-[9px] sm:text-[10px] text-blue-700 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-blue-200">
                   Only fee items for selected classes are available.
                 </p>
               )}
 
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-48 overflow-y-auto">
+              <div className="p-2 sm:p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-40 sm:max-h-48 overflow-y-auto">
                 {filteredItems.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-slate-500">
+                  <div className="text-center py-6 sm:py-8 text-[10px] sm:text-xs text-slate-500">
                     <p>No items available for this scope.</p>
                     <p className="mt-1">Create fee items first, then assign them to roles.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                     {filteredItems.map((item) => (
-                      <label key={item._id} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-white">
+                      <label
+                        key={item._id}
+                        className="flex items-center gap-1.5 sm:gap-2 cursor-pointer p-1.5 sm:p-2 rounded hover:bg-white"
+                      >
                         <Checkbox
                           checked={selectedItemIds.includes(item._id)}
                           onCheckedChange={() => handleItemToggle(item._id)}
-                          className="h-4 w-4"
+                          className="h-3.5 w-3.5 sm:h-4 sm:w-4"
                         />
                         <div className="flex-1 min-w-0">
-                          <span className="text-xs text-slate-700 truncate block">{item.name}</span>
-                          <span className="text-[10px] text-slate-500">₦{item.price?.toLocaleString()}</span>
+                          <span className="text-[10px] sm:text-xs text-slate-700 truncate block">{item.name}</span>
+                          <span className="text-[9px] sm:text-[10px] text-slate-500">₦{item.price?.toLocaleString()}</span>
                         </div>
                       </label>
                     ))}
@@ -345,15 +345,15 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
           </form>
         </div>
 
-        {/* Footer - Fixed at bottom, always visible */}
-        <div className="p-4 sm:p-6 border-t border-slate-200 bg-slate-50 shrink-0">
-          <div className="flex gap-2 sm:gap-3">
+        {/* Footer - Full width buttons on mobile */}
+        <div className="p-3 sm:p-6 border-t border-slate-200 bg-slate-50 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
-              className="flex-1 sm:flex-none text-slate-600 hover:bg-slate-200"
+              className="w-full sm:w-auto h-9 sm:h-10 text-sm text-slate-600 hover:bg-slate-200"
             >
               Cancel
             </Button>
@@ -361,7 +361,7 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
               type="submit"
               onClick={handleSubmit}
               disabled={isSubmitting || !name.trim() || selectedItemIds.length === 0}
-              className="flex-1 sm:flex-none bg-[#136dec] hover:bg-blue-700 text-white"
+              className="w-full sm:w-auto h-9 sm:h-10 text-sm bg-[#136dec] hover:bg-blue-700 text-white"
             >
               {isSubmitting ? "Saving..." : editingRole ? "Update" : "Create"}
             </Button>
@@ -661,14 +661,16 @@ export default function Roles() {
               <table className="w-full text-left">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                       Role Name
                     </th>
-                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Scope</th>
-                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">
+                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                      Scope
+                    </th>
+                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">
                       Fee Items
                     </th>
-                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
+                    <th className="px-4 sm:px-6 py-4 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">
                       Actions
                     </th>
                   </tr>
@@ -676,7 +678,7 @@ export default function Roles() {
                 <tbody className="divide-y divide-slate-100">
                   {paginatedRoles.map((role) => (
                     <tr key={role._id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 sm:px-6 py-4 sm:py-5">
+                      <td className="px-4 sm:px-6 py-4 sm:py-5 min-w-[200px]">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#136dec]/10 flex items-center justify-center text-[#136dec] shrink-0">
                             <Shield size={18} />
@@ -684,11 +686,11 @@ export default function Roles() {
                           <span className="font-semibold text-xs sm:text-sm md:text-base">{role.name}</span>
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 sm:py-5">{getScopeBadge(role.scope, role.sectionId?.name)}</td>
-                      <td className="px-4 sm:px-6 py-4 sm:py-5 text-slate-600 hidden md:table-cell">
+                      <td className="px-4 sm:px-6 py-4 sm:py-5 whitespace-nowrap">{getScopeBadge(role.scope, role.sectionId?.name)}</td>
+                      <td className="px-4 sm:px-6 py-4 sm:py-5 text-slate-600 hidden md:table-cell whitespace-nowrap">
                         <span className="text-xs sm:text-sm">{role.itemIds?.length || 0} items</span>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 sm:py-5 text-right">
+                      <td className="px-4 sm:px-6 py-4 sm:py-5 text-right whitespace-nowrap">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="p-2 text-slate-400 hover:text-[#136dec] hover:bg-slate-50 rounded transition-colors">
