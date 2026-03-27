@@ -1,8 +1,14 @@
+// controllers/roles.controller.js
 import Role from "../models/role.model.js";
+import User from "../models/user.model.js";
 
 export const getAllRoles = async (req, res, next) => {
   try {
-    const roles = await Role.find({}).sort({ name: 1 });
+    const roles = await Role.find({})
+      .populate("sectionId", "name")
+      .populate("classIds", "name")
+      .populate("itemIds", "name")
+      .sort({ createdAt: -1 });
     return res.status(200).json({ message: "Roles fetched successfully", roles });
   } catch (error) {
     console.error("Error fetching roles:", error);
@@ -97,10 +103,7 @@ export const getRoleById = async (req, res, next) => {
   }
 
   try {
-    const role = await Role.findById(id)
-      .populate("sectionId")
-      .populate("classIds")
-      .populate("itemIds");
+    const role = await Role.findById(id).populate("sectionId", "name").populate("classIds", "name").populate("itemIds", "name");
 
     if (!role) {
       const err = new Error("Role not found");
@@ -108,7 +111,7 @@ export const getRoleById = async (req, res, next) => {
       return next(err);
     }
 
-    return res.status(200).json({ role });
+    return res.status(200).json({ message: "Role fetched successfully", role });
   } catch (error) {
     console.error("Error fetching role:", error);
     if (!error.statusCode) error.statusCode = 500;
@@ -211,9 +214,9 @@ export const updateRoleById = async (req, res, next) => {
     }
 
     const updatedRole = await Role.findByIdAndUpdate(id, updateData, { new: true })
-      .populate("sectionId")
-      .populate("classIds")
-      .populate("itemIds");
+      .populate("sectionId", "name")
+      .populate("classIds", "name")
+      .populate("itemIds", "name");
 
     return res.status(200).json({ message: "Role updated successfully", role: updatedRole });
   } catch (error) {
@@ -233,17 +236,56 @@ export const deleteRoleById = async (req, res, next) => {
   }
 
   try {
+    //  Count affected users first
+    const affectedUsers = await User.countDocuments({ roles: id });
+
+    //  Delete the role
     const deletedRole = await Role.findByIdAndDelete(id);
+
     if (!deletedRole) {
       const err = new Error("Role not found");
       err.statusCode = 404;
       return next(err);
     }
 
-    return res.status(200).json({ message: "Role deleted successfully", role: deletedRole });
+    //  Remove role from all users (DON'T delete users!)
+    await User.updateMany({ roles: id }, { $pull: { roles: id } });
+
+    return res.status(200).json({
+      message: "Role deleted successfully",
+      role: deletedRole,
+      affectedUsers,
+    });
   } catch (error) {
     console.error("Error deleting role:", error);
     if (!error.statusCode) error.statusCode = 500;
     return next(error);
+  }
+};
+
+//  NEW: Get role dependencies (for delete warning)
+export const getRoleDependencies = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const role = await Role.findById(id);
+    if (!role) {
+      const err = new Error("Role not found");
+      err.statusCode = 404;
+      return next(err);
+    }
+
+    const userCount = await User.countDocuments({ roles: id });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        users: userCount,
+        items: role.itemIds?.length || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching dependencies:", error);
+    next(error);
   }
 };

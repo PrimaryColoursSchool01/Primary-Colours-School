@@ -23,13 +23,13 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "staff"],
       default: "staff",
     },
-    role: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Role",
-      required: function () {
-        return this.userType === "staff";
+    roles: [
+      {
+        // ← Changed from 'role' to 'roles' (array)
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Role",
       },
-    },
+    ],
     refreshToken: {
       type: String,
     },

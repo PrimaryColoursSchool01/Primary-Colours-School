@@ -5,6 +5,7 @@ import {
   getRoleById,
   updateRoleById,
   deleteRoleById,
+  getRoleDependencies,
 } from "../controllers/role.controller.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireRole } from "../middlewares/requireRole.js";
@@ -20,5 +21,7 @@ router.get("/:id", requireAuth, requireRole("admin"), getRoleById);
 router.put("/:id", requireAuth, requireRole("admin"), updateRoleById);
 
 router.delete("/:id", requireAuth, requireRole("admin"), deleteRoleById);
+
+router.get("/:id/dependencies", requireAuth, requireRole("admin"), getRoleDependencies);
 
 export default router;

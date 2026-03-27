@@ -57,7 +57,7 @@ app.use("/auth", authRoutes);
 app.use("/sections", sectionsRoutes);
 app.use("/classes", classRoutes);
 app.use("/item", itemRoutes);
-app.use("/role", roleRoutes);
+app.use("/roles", roleRoutes);
 app.use("/payment-records", paymentRecordRoutes);
 app.use("/users", userRoutes);
 app.use("/dashboard", dashboardRoutes);
