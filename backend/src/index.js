@@ -24,7 +24,7 @@ const allowedOrigins = [
   "http://localhost:5173", // main frontend (admin + staff)
   "http://localhost:5174", // parent form (if running simultaneously)
   process.env.FRONTEND_URL, // production frontend
-  process.env.FORM_URL, // production parent form
+  process.env.FORM_URL | "https://school-payment-record-form.vercel.app", // production parent form
 ].filter(Boolean);
 
 app.use(

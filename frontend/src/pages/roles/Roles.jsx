@@ -143,7 +143,6 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* ✅ Mobile-optimized modal width */}
       <DialogContent className="sm:max-w-[600px] max-w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="p-3 sm:p-6 border-b border-slate-200 shrink-0">
@@ -160,9 +159,9 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
-              className="h-6 w-6 sm:h-7 sm:w-7 text-slate-400 hover:text-slate-600 shrink-0"
+              className="h-7 w-7 sm:h-8 sm:w-8 text-slate-400 hover:text-slate-600 shrink-0"
             >
-              <X size={12} className="sm:size-14" />
+              <X size={16} className="sm:size-18" />
             </Button>
           </div>
         </DialogHeader>
@@ -185,44 +184,44 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
               />
             </div>
 
-            {/* Scope Selection - Stack on mobile */}
+            {/* Scope Selection */}
             <div className="space-y-2 sm:space-y-3">
               <Label className="text-xs sm:text-sm font-semibold text-slate-700">Scope</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setSelectionType("all-sections")}
-                  className={`flex items-center justify-center gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
+                  className={`flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
                     selectionType === "all-sections"
                       ? "bg-[#136dec] text-white border-[#136dec]"
                       : "bg-white text-slate-600 border-slate-200 hover:border-[#136dec]"
                   }`}
                 >
-                  <Globe size={14} className="sm:size-16" />
+                  <Globe size={18} className="sm:size-20" />
                   <span className="whitespace-nowrap">School-Wide</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectionType("section-all-classes")}
-                  className={`flex items-center justify-center gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
+                  className={`flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
                     selectionType === "section-all-classes"
                       ? "bg-[#136dec] text-white border-[#136dec]"
                       : "bg-white text-slate-600 border-slate-200 hover:border-[#136dec]"
                   }`}
                 >
-                  <Folder size={14} className="sm:size-16" />
+                  <Folder size={18} className="sm:size-20" />
                   <span className="whitespace-nowrap">By Section</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectionType("section-specific-classes")}
-                  className={`flex items-center justify-center gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
+                  className={`flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-2.5 sm:p-3 rounded-lg border text-xs font-semibold transition-all ${
                     selectionType === "section-specific-classes"
                       ? "bg-[#136dec] text-white border-[#136dec]"
                       : "bg-white text-slate-600 border-slate-200 hover:border-[#136dec]"
                   }`}
                 >
-                  <GraduationCap size={14} className="sm:size-16" />
+                  <GraduationCap size={18} className="sm:size-20" />
                   <span className="whitespace-nowrap">By Class</span>
                 </button>
               </div>
@@ -345,7 +344,7 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
           </form>
         </div>
 
-        {/* Footer - Full width buttons on mobile */}
+        {/* Footer */}
         <div className="p-3 sm:p-6 border-t border-slate-200 bg-slate-50 shrink-0">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Button
