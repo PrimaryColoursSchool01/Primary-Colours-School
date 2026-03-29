@@ -1,3 +1,4 @@
+// models/user.model.js
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -25,11 +26,16 @@ const userSchema = new mongoose.Schema(
     },
     roles: [
       {
-        // ← Changed from 'role' to 'roles' (array)
         type: mongoose.Schema.Types.ObjectId,
         ref: "Role",
       },
     ],
+    status: {
+      type: String,
+      enum: ["active", "inactive", "suspended"],
+      default: "active",
+    },
+    suspendedAt: Date,
     refreshToken: {
       type: String,
     },

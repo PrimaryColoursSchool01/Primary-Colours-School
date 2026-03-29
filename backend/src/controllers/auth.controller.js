@@ -29,6 +29,12 @@ export const login = async (req, res, next) => {
       return next(err);
     }
 
+    if (user.status === "suspended") {
+      const err = new Error("Account is suspended. Contact administrator.");
+      err.statusCode = 403;
+      return next(err);
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -90,8 +96,7 @@ export const forgotPassword = async (req, res, next) => {
 
     if (!user) {
       return res.status(200).json({
-        message:
-          "If an account exists with that email, you will receive a link to reset your password.",
+        message: "If an account exists with that email, you will receive a link to reset your password.",
       });
     }
 
@@ -112,8 +117,7 @@ export const forgotPassword = async (req, res, next) => {
     console.log(`Password reset email sent to ${normalizedEmail} with link: ${resetLink}`);
 
     return res.json({
-      message:
-        "If an account exists with this email, you will receive a link to reset your password.",
+      message: "If an account exists with this email, you will receive a link to reset your password.",
     });
   } catch (error) {
     console.error("Forgot Password Error:", error);
