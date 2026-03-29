@@ -21,16 +21,15 @@ import userRoutes from "./routes/user.route.js";
 import dashboardRoutes from "./routes/dashboard.route.js";
 
 const allowedOrigins = [
-  "http://localhost:5173", // main frontend (admin + staff)
-  "http://localhost:5174", // parent form (if running simultaneously)
-  process.env.FRONTEND_URL || "https://school-registration-system-psi.vercel.app", // production frontend
-  process.env.FORM_URL || "https://school-payment-record-form.vercel.app", // production parent form
+  "http://localhost:5173",
+  "http://localhost:5174",
+  process.env.FRONTEND_URL || "https://school-registration-system-psi.vercel.app",
+  process.env.FORM_URL || "https://school-payment-record-form.vercel.app",
 ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow requests with no origin (Postman, mobile apps)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
@@ -38,11 +37,20 @@ app.use(
         callback(new Error(`CORS policy: origin ${origin} not allowed`));
       }
     },
-    credentials: true, // required for httpOnly cookie (refresh token)
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["Set-Cookie"],
   }),
 );
+
+app.options("*", cors());
+
+app.use((req, res, next) => {
+  console.log(`📍 Request: ${req.method} ${req.path}`);
+  console.log(`📍 Origin: ${req.headers.origin}`);
+  next();
+});
 
 app.use(express.json());
 app.use(cookieParser());
