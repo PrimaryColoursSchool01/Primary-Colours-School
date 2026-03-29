@@ -1,3 +1,4 @@
+// controllers/auth.controller.js
 import { validateEmail } from "../utils/auth.js";
 import bcrypt from "bcrypt";
 import User from "../models/user.model.js";
@@ -5,6 +6,9 @@ import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
+
+// ─── Login ───────────────────────────────────────────────────────────────────
+
 export const login = async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -21,7 +25,7 @@ export const login = async (req, res, next) => {
   }
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).populate("roles", "name scope");
 
     if (!user) {
       const err = new Error("Invalid credentials");
@@ -29,6 +33,7 @@ export const login = async (req, res, next) => {
       return next(err);
     }
 
+    // Check if user is suspended
     if (user.status === "suspended") {
       const err = new Error("Account is suspended. Contact administrator.");
       err.statusCode = 403;
@@ -50,11 +55,13 @@ export const login = async (req, res, next) => {
     user.refreshToken = refreshToken;
     await user.save();
 
+    // ✅ UPDATED: sameSite: "none" + path: "/"
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
     });
 
     return res.json({
@@ -63,8 +70,9 @@ export const login = async (req, res, next) => {
         id: user._id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        roles: user.roles, // ✅ Fixed: was 'role'
         userType: user.userType,
+        status: user.status,
       },
     });
   } catch (error) {
@@ -73,6 +81,8 @@ export const login = async (req, res, next) => {
     return next(error);
   }
 };
+
+// ─── Forgot Password ─────────────────────────────────────────────────────────
 
 export const forgotPassword = async (req, res, next) => {
   const { email } = req.body;
@@ -126,7 +136,9 @@ export const forgotPassword = async (req, res, next) => {
   }
 };
 
-export const resetPassword = async (req, res, next) => {
+// ─── Reset Password With Token ───────────────────────────────────────────────
+
+export const resetPasswordWithToken = async (req, res, next) => {
   const { token, newPassword } = req.body;
 
   if (!token || !newPassword) {
@@ -157,8 +169,7 @@ export const resetPassword = async (req, res, next) => {
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-
-    user.tokenVersion += 1;
+    user.tokenVersion += 1; // Invalidate existing sessions
 
     await user.save();
 
@@ -170,12 +181,20 @@ export const resetPassword = async (req, res, next) => {
   }
 };
 
+// ─── Change Password (When Logged In) ────────────────────────────────────────
+
 export const changePassword = async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
   const userId = req.user.id;
 
   if (!currentPassword || !newPassword) {
     const err = new Error("Current password and new password are required");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  if (newPassword.length < 6) {
+    const err = new Error("Password must be at least 6 characters");
     err.statusCode = 400;
     return next(err);
   }
@@ -198,6 +217,7 @@ export const changePassword = async (req, res, next) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
+    user.tokenVersion += 1; // ✅ Invalidate existing sessions
     await user.save();
 
     return res.json({ message: "Password changed successfully" });
@@ -208,7 +228,8 @@ export const changePassword = async (req, res, next) => {
   }
 };
 
-// todo:test this on a api client like postman or insomnia
+// ─── Refresh Token ───────────────────────────────────────────────────────────
+
 export const refreshToken = async (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
 
@@ -241,11 +262,14 @@ export const refreshToken = async (req, res, next) => {
     await user.save();
 
     const isProd = process.env.NODE_ENV === "production";
+
+    // ✅ UPDATED: sameSite: "none" + path: "/"
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
     });
 
     return res.json({
@@ -255,7 +279,7 @@ export const refreshToken = async (req, res, next) => {
         id: user._id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        roles: user.roles, // ✅ Fixed: was 'role'
         userType: user.userType,
       },
     });
@@ -266,13 +290,20 @@ export const refreshToken = async (req, res, next) => {
   }
 };
 
+// ─── Logout ──────────────────────────────────────────────────────────────────
+
 export const logout = async (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
 
+  // ✅ FIXED: Don't error if token is missing - just clear cookie
   if (!refreshToken) {
-    const err = new Error("Refresh token is missing");
-    err.statusCode = 400;
-    return next(err);
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
+      path: "/",
+    });
+    return res.json({ message: "Logged out successfully" });
   }
 
   try {
@@ -283,17 +314,18 @@ export const logout = async (req, res, next) => {
       user.refreshToken = null;
       await user.save();
     }
-
+  } catch (error) {
+    // Ignore verification errors - still log them out
+    console.error("Logout verification error:", error);
+  } finally {
+    // ✅ Always clear cookie
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "none",
+      path: "/",
     });
-
-    return res.json({ message: "Logged out successfully" });
-  } catch (error) {
-    console.error("Logout Error:", error);
-    if (!error.statusCode) error.statusCode = 500;
-    return next(error);
   }
+
+  return res.json({ message: "Logged out successfully" });
 };
