@@ -3,7 +3,7 @@ import {
   login,
   changePassword,
   forgotPassword,
-  resetPassword,
+  resetPasswordWithToken as resetPassword,
   refreshToken,
   logout,
 } from "../controllers/auth.controller.js";
