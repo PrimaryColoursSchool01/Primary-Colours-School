@@ -55,7 +55,6 @@ export const login = async (req, res, next) => {
     user.refreshToken = refreshToken;
     await user.save();
 
-    // ✅ UPDATED: sameSite: "none" + path: "/"
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: isProd,
@@ -70,7 +69,7 @@ export const login = async (req, res, next) => {
         id: user._id,
         email: user.email,
         fullName: user.fullName,
-        roles: user.roles, // ✅ Fixed: was 'role'
+        roles: user.roles,
         userType: user.userType,
         status: user.status,
       },
@@ -118,7 +117,7 @@ export const forgotPassword = async (req, res, next) => {
     user.resetPasswordExpires = tokenExpiry;
     await user.save();
 
-    const resetLink = `${process.env.APP_URL}/reset-password?token=${rawToken}&email=${normalizedEmail}`;
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}&email=${normalizedEmail}`;
     await sendEmail({
       to: normalizedEmail,
       subject: "Password Reset Request",
@@ -217,7 +216,7 @@ export const changePassword = async (req, res, next) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-    user.tokenVersion += 1; // ✅ Invalidate existing sessions
+    user.tokenVersion += 1;
     await user.save();
 
     return res.json({ message: "Password changed successfully" });
@@ -263,7 +262,6 @@ export const refreshToken = async (req, res, next) => {
 
     const isProd = process.env.NODE_ENV === "production";
 
-    // ✅ UPDATED: sameSite: "none" + path: "/"
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: isProd,
@@ -279,7 +277,7 @@ export const refreshToken = async (req, res, next) => {
         id: user._id,
         email: user.email,
         fullName: user.fullName,
-        roles: user.roles, // ✅ Fixed: was 'role'
+        roles: user.roles,
         userType: user.userType,
       },
     });
@@ -295,7 +293,6 @@ export const refreshToken = async (req, res, next) => {
 export const logout = async (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
 
-  // ✅ FIXED: Don't error if token is missing - just clear cookie
   if (!refreshToken) {
     res.clearCookie("refreshToken", {
       httpOnly: true,
@@ -315,10 +312,8 @@ export const logout = async (req, res, next) => {
       await user.save();
     }
   } catch (error) {
-    // Ignore verification errors - still log them out
     console.error("Logout verification error:", error);
   } finally {
-    // ✅ Always clear cookie
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

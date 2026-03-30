@@ -9,7 +9,7 @@ export const generateAccessToken = (user) => {
       tokenVersion: user.tokenVersion,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "1h" }, //todo: change from 1h to 15m in production
+    { expiresIn: process.env.NODE_ENV === "production" ? "15m" : "1h" },
   );
 };
 

@@ -44,16 +44,6 @@ app.use(
   }),
 );
 
-// ❌ REMOVE THIS LINE - Causes crash in Express 5
-// app.options("*", cors());
-
-// ✅ Debug logging (temporary)
-app.use((req, res, next) => {
-  console.log(`📍 Request: ${req.method} ${req.path}`);
-  console.log(`📍 Origin: ${req.headers.origin}`);
-  next();
-});
-
 app.use(express.json());
 app.use(cookieParser());
 app.use(logger);

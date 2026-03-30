@@ -3,8 +3,7 @@ import bcrypt from "bcrypt";
 import User from "../models/user.model.js";
 import Role from "../models/role.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
-
-// ─── Register User ───────────────────────────────────────────────────────────
+import { sendEmail } from "../utils/sendEmail.js";
 
 export const registerUser = async (req, res, next) => {
   const { fullName, email, password, userType, roleIds } = req.body;
@@ -89,6 +88,26 @@ export const registerUser = async (req, res, next) => {
       status: "active",
     });
 
+    // Send Welcome Email to confirm email address is valid
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Welcome to School Management System",
+        html: `
+          <h2>Welcome, ${fullName}!</h2>
+          <p>Your account has been created by the admin.</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Temporary Password:</strong> ${password}</p>
+          <p>Please login and change your password immediately.</p>
+          <p>Login URL: ${process.env.FRONTEND_URL}/login</p>
+        `,
+      });
+      console.log(`Welcome email sent to ${email}`);
+    } catch (emailError) {
+      console.error("Failed to send welcome email:", emailError);
+      // Do not fail the request, just log the error
+    }
+
     const populatedUser = await User.findById(newUser._id).populate("roles", "name scope");
 
     return res.status(201).json({
@@ -109,8 +128,6 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
-// ─── Get All Users ───────────────────────────────────────────────────────────
-
 export const getAllUsers = async (req, res, next) => {
   try {
     const { userType, status, search, page = 1, limit = 10 } = req.query;
@@ -122,7 +139,7 @@ export const getAllUsers = async (req, res, next) => {
       filter.userType = userType;
     }
 
-    if (status && ["active", "inactive", "suspended"].includes(status)) {
+    if (status && ["active", "suspended"].includes(status)) {
       filter.status = status;
     }
 
@@ -156,8 +173,6 @@ export const getAllUsers = async (req, res, next) => {
     return next(error);
   }
 };
-
-// ─── Get User By ID ──────────────────────────────────────────────────────────
 
 export const getUserById = async (req, res, next) => {
   const { id } = req.params;
@@ -199,8 +214,6 @@ export const getUserById = async (req, res, next) => {
   }
 };
 
-// ─── Update User ─────────────────────────────────────────────────────────────
-
 export const updateUserById = async (req, res, next) => {
   const { id } = req.params;
   const { fullName, email, roleIds, status } = req.body;
@@ -237,13 +250,32 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
+      // Check if email is already taken by another user
       const existingUser = await User.findOne({ email: email.trim(), _id: { $ne: id } });
       if (existingUser) {
         const err = new Error("Email already in use");
         err.statusCode = 409;
         return next(err);
       }
+
+      // Store old email for notification
+      const oldEmail = user.email;
       user.email = email.trim();
+
+      // Send email change notification to the new email
+      try {
+        await sendEmail({
+          to: email.trim(),
+          subject: "Your Email Was Updated",
+          html: `
+            <p>Hello ${fullName},</p>
+            <p>Your email address has been updated from <strong>${oldEmail}</strong> to <strong>${email.trim()}</strong>.</p>
+            <p>If you didn't request this change, please contact your administrator.</p>
+          `,
+        });
+      } catch (emailError) {
+        console.error("Failed to send email update notification:", emailError);
+      }
     }
 
     // Update roles
@@ -267,7 +299,7 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
-      // ✅ Get all itemIds from NEW roles (OLD variable removed)
+      // Get all itemIds from NEW roles
       const newRoleItemIds = await Role.find({ _id: { $in: finalRoleIds } }).distinct("itemIds");
 
       // Find pending item transactions this user is assigned to
@@ -296,7 +328,7 @@ export const updateUserById = async (req, res, next) => {
 
     // Update status
     if (status !== undefined) {
-      if (!["active", "inactive", "suspended"].includes(status)) {
+      if (!["active", "suspended"].includes(status)) {
         const err = new Error("Invalid status");
         err.statusCode = 400;
         return next(err);
@@ -309,7 +341,7 @@ export const updateUserById = async (req, res, next) => {
       }
 
       // Clear suspendedAt if unsuspended
-      if (status !== "suspended" && user.suspendedAt) {
+      if (status === "active" && user.suspendedAt) {
         user.suspendedAt = null;
       }
     }
@@ -335,11 +367,9 @@ export const updateUserById = async (req, res, next) => {
     return next(error);
   }
 };
-// ─── Suspend User ────────────────────────────────────────────────────────────
 
 export const suspendUser = async (req, res, next) => {
   const { id } = req.params;
-  const { reason } = req.body;
 
   if (!id) {
     const err = new Error("User ID is required");
@@ -381,8 +411,6 @@ export const suspendUser = async (req, res, next) => {
     return next(error);
   }
 };
-
-// ─── Unsuspend User ──────────────────────────────────────────────────────────
 
 export const unsuspendUser = async (req, res, next) => {
   const { id } = req.params;
@@ -426,8 +454,6 @@ export const unsuspendUser = async (req, res, next) => {
     return next(error);
   }
 };
-
-// ─── Delete User ─────────────────────────────────────────────────────────────
 
 export const deleteUserById = async (req, res, next) => {
   const { id } = req.params;
@@ -479,8 +505,6 @@ export const deleteUserById = async (req, res, next) => {
   }
 };
 
-// ─── Reset Password ──────────────────────────────────────────────────────────
-
 export const resetPassword = async (req, res, next) => {
   const { id } = req.params;
   const { newPassword } = req.body;
@@ -516,60 +540,29 @@ export const resetPassword = async (req, res, next) => {
     user.tokenVersion += 1; // Invalidate existing sessions
     await user.save();
 
+    // Send password reset notification to user
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Your Password Was Reset",
+        html: `
+          <p>Hello ${user.fullName},</p>
+          <p>Your password has been reset by an administrator.</p>
+          <p><strong>New Temporary Password:</strong> ${newPassword}</p>
+          <p>Please login and change your password immediately.</p>
+          <p>Login URL: ${process.env.FRONTEND_URL}/login</p>
+        `,
+      });
+      console.log(`Password reset notification sent to ${user.email}`);
+    } catch (emailError) {
+      console.error("Failed to send password reset notification:", emailError);
+    }
+
     return res.status(200).json({
       message: "Password reset successfully",
     });
   } catch (error) {
     console.error("Error resetting password:", error);
-    if (!error.statusCode) error.statusCode = 500;
-    return next(error);
-  }
-};
-
-// ─── Change Own Password ─────────────────────────────────────────────────────
-
-export const changeOwnPassword = async (req, res, next) => {
-  const { currentPassword, newPassword } = req.body;
-  const userId = req.user._id; // From auth middleware
-
-  if (!currentPassword || !newPassword) {
-    const err = new Error("Current password and new password are required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (newPassword.length < 6) {
-    const err = new Error("Password must be at least 6 characters");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      const err = new Error("User not found");
-      err.statusCode = 404;
-      return next(err);
-    }
-
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      const err = new Error("Current password is incorrect");
-      err.statusCode = 401;
-      return next(err);
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
-    user.tokenVersion += 1;
-    await user.save();
-
-    return res.status(200).json({
-      message: "Password changed successfully",
-    });
-  } catch (error) {
-    console.error("Error changing password:", error);
     if (!error.statusCode) error.statusCode = 500;
     return next(error);
   }
