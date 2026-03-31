@@ -302,10 +302,10 @@ export const updateUserById = async (req, res, next) => {
       // Get all itemIds from NEW roles
       const newRoleItemIds = await Role.find({ _id: { $in: finalRoleIds } }).distinct("itemIds");
 
-      // Find pending item transactions this user is assigned to
+      // CHANGE: Find pending AND unassigned item transactions this user is assigned to
       const userItemTransactions = await ItemTransaction.find({
         staffIds: id,
-        status: "pending",
+        status: { $in: ["pending", "unassigned"] },
       });
 
       // Find transactions where item is no longer in user's new roles
@@ -487,8 +487,12 @@ export const deleteUserById = async (req, res, next) => {
     // Pull deleted user from all item transactions
     await ItemTransaction.updateMany({ staffIds: id }, { $pull: { staffIds: id } });
 
-    // Mark item transactions with no staff left as unassigned
-    await ItemTransaction.updateMany({ staffIds: { $size: 0 }, status: "pending" }, { $set: { status: "unassigned" } });
+    // CHANGE: Mark item transactions with no staff left as unassigned (was only checking "pending" status)
+    // Now handles both "pending" and "unassigned" statuses
+    await ItemTransaction.updateMany(
+      { staffIds: { $size: 0 }, status: { $in: ["pending", "unassigned"] } },
+      { $set: { status: "unassigned" } },
+    );
 
     return res.status(200).json({
       message: "User deleted successfully",

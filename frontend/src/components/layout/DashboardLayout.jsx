@@ -55,24 +55,15 @@ function SidebarContent({ onClose, onLogout }) {
       <div className="px-5 py-5 border-b border-slate-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-[#136dec] rounded-lg flex items-center justify-center shrink-0">
-              <GraduationCap size={16} className="text-white" strokeWidth={2.5} />
-            </div>
+            <img src="/primarcoloursbadge.png" alt="Primary Colours Badge" className="w-10 h-10 object-contain shrink-0" />
             <div>
-              <p className="text-slate-900 text-sm font-bold leading-none tracking-tight">
-                Primary Colours
-              </p>
-              <p className="text-slate-500 text-[10px] mt-0.5 font-medium uppercase tracking-wider">
-                Admin Panel
-              </p>
+              <p className="text-slate-900 text-sm font-bold leading-none tracking-tight">Primary Colours</p>
+              <p className="text-slate-500 text-[10px] mt-0.5 font-medium uppercase tracking-wider">Admin Panel</p>
             </div>
           </div>
           {/* Close button — mobile only */}
           {onClose && (
-            <button
-              onClick={onClose}
-              className="lg:hidden text-slate-400 hover:text-slate-600 transition-colors p-1"
-            >
+            <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-600 transition-colors p-1">
               <X size={18} />
             </button>
           )}
@@ -83,9 +74,7 @@ function SidebarContent({ onClose, onLogout }) {
       <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5 custom-scrollbar">
         {navGroups.map((group) => (
           <div key={group.label}>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 px-3 mb-1.5">
-              {group.label}
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 px-3 mb-1.5">{group.label}</p>
             <ul className="space-y-0.5">
               {group.items.map((item) => (
                 <li key={item.title}>
@@ -102,11 +91,7 @@ function SidebarContent({ onClose, onLogout }) {
                   >
                     {({ isActive }) => (
                       <>
-                        <item.icon
-                          size={16}
-                          className={isActive ? "text-white" : "text-slate-400"}
-                          strokeWidth={2}
-                        />
+                        <item.icon size={16} className={isActive ? "text-white" : "text-slate-400"} strokeWidth={2} />
                         <span>{item.title}</span>
                       </>
                     )}
@@ -171,10 +156,7 @@ export default function DashboardLayout() {
       {sidebarOpen && (
         <>
           {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40 bg-black/60 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
           {/* Drawer */}
           <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white lg:hidden flex flex-col shadow-2xl custom-scrollbar border-r border-slate-200">
             <SidebarContent onClose={() => setSidebarOpen(false)} onLogout={handleLogout} />
@@ -194,9 +176,7 @@ export default function DashboardLayout() {
               <Menu size={20} />
             </button>
             {/* Page title injected via window title or use a context — placeholder for now */}
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-              Dashboard
-            </h2>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Dashboard</h2>
           </div>
 
           {/* Right */}
@@ -212,9 +192,7 @@ export default function DashboardLayout() {
             {/* User */}
             <div className="flex items-center gap-2.5">
               <div className="hidden sm:block text-right">
-                <p className="text-sm font-semibold text-slate-900 leading-none">
-                  {user?.fullName || "Admin"}
-                </p>
+                <p className="text-sm font-semibold text-slate-900 leading-none">{user?.fullName || "Admin"}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Administrator</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-[#136dec] flex items-center justify-center text-white text-xs font-black shrink-0">
