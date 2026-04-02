@@ -132,7 +132,7 @@ export default function Login() {
           <h2 className="text-2xl sm:text-[26px] font-black tracking-tight leading-tight mb-1 text-[#1E293B] lg:text-slate-900">
             Welcome back
           </h2>
-          <p className="text-sm mb-8 leading-relaxed text-[#64748B] lg:text-slate-500">Sign in to your admin account to continue</p>
+          <p className="text-sm mb-8 leading-relaxed text-[#64748B] lg:text-slate-500">Sign in to your account to continue</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}

@@ -1,3 +1,4 @@
+// routes/payment-record.routes.js
 import { Router } from "express";
 import {
   getAllPaymentRecords,
@@ -10,12 +11,12 @@ import { requireRole } from "../middlewares/requireRole.js";
 
 const router = Router();
 
-router.get("/", requireAuth, getAllPaymentRecords);
-
+// Public endpoint (parents submit payment)
 router.post("/", createPaymentRecord);
 
-router.get("/:id", requireAuth, getPaymentRecordById);
-
+// Admin only endpoints
+router.get("/", requireAuth, requireRole("admin"), getAllPaymentRecords);
+router.get("/:id", requireAuth, requireRole("admin"), getPaymentRecordById);
 router.put("/:id", requireAuth, requireRole("admin"), updatePaymentRecordById);
 
 export default router;

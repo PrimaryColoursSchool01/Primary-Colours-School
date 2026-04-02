@@ -1,6 +1,13 @@
 import PaymentRecord from "../models/payment-record.model.js";
-import Class from "../models/class.model.js"
-import Item from "../models/items-fess.model.js"
+import ItemTransaction from "../models/item-transaction.model.js";
+import Role from "../models/role.model.js";
+import User from "../models/user.model.js";
+import Class from "../models/class.model.js";
+import Item from "../models/items-fess.model.js";
+
+// ─────────────────────────────────────────────────────────────────────
+// CREATE PAYMENT RECORD (Public - Parent Form Submission)
+// ─────────────────────────────────────────────────────────────────────
 export const createPaymentRecord = async (req, res, next) => {
   const {
     nameOfChild,
@@ -103,13 +110,14 @@ export const createPaymentRecord = async (req, res, next) => {
       return next(err);
     }
 
-    // Build items array using prices from the DB
+    // Build items array using prices from the DB (prevent frontend price manipulation)
     const itemsWithAmount = items.map((item) => {
       const dbItem = existingItems.find((i) => i._id.toString() === item.itemId.toString());
       return {
         itemId: item.itemId,
         quantity: item.quantity,
         amountAtPayment: dbItem.price,
+        status: "pending", // Default status for new items
       };
     });
 
@@ -144,8 +152,11 @@ export const createPaymentRecord = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// GET ALL PAYMENT RECORDS (Admin Only)
+// ─────────────────────────────────────────────────────────────────────
 export const getAllPaymentRecords = async (req, res, next) => {
-  const { status, classId, session, term, search } = req.query;
+  const { status, classId, session, term, search, page = 1, limit = 20 } = req.query;
 
   try {
     const filter = {};
@@ -167,20 +178,27 @@ export const getAllPaymentRecords = async (req, res, next) => {
     }
 
     if (search) {
-      filter.$or = [
-        { nameOfChild: { $regex: search, $options: "i" } },
-        { nameOfPayerOrCompany: { $regex: search, $options: "i" } },
-      ];
+      filter.$or = [{ nameOfChild: { $regex: search, $options: "i" } }, { nameOfPayerOrCompany: { $regex: search, $options: "i" } }];
     }
 
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await PaymentRecord.countDocuments(filter);
+
     const paymentRecords = await PaymentRecord.find(filter)
-      .populate("classId")
-      .populate("items.itemId")
-      .sort({ createdAt: -1 });
+      .populate("classId", "name")
+      .populate("items.itemId", "name")
+      .populate("acceptedBy", "fullName email")
+      .populate("rejectedBy", "fullName email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
     return res.status(200).json({
       message: "Payment records fetched successfully",
       count: paymentRecords.length,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
       paymentRecords,
     });
   } catch (error) {
@@ -190,6 +208,9 @@ export const getAllPaymentRecords = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// GET PAYMENT RECORD BY ID (Admin Only)
+// ─────────────────────────────────────────────────────────────────────
 export const getPaymentRecordById = async (req, res, next) => {
   const { id } = req.params;
 
@@ -201,8 +222,10 @@ export const getPaymentRecordById = async (req, res, next) => {
 
   try {
     const paymentRecord = await PaymentRecord.findById(id)
-      .populate("classId")
-      .populate("items.itemId");
+      .populate("classId", "name")
+      .populate("items.itemId", "name")
+      .populate("acceptedBy", "fullName email")
+      .populate("rejectedBy", "fullName email");
 
     if (!paymentRecord) {
       const err = new Error("Payment record not found");
@@ -210,9 +233,17 @@ export const getPaymentRecordById = async (req, res, next) => {
       return next(err);
     }
 
+    // Get associated ItemTransactions for this payment
+    const itemTransactions = await ItemTransaction.find({
+      paymentRecordId: paymentRecord._id,
+    })
+      .populate("itemId", "name")
+      .populate("staffIds", "fullName email");
+
     return res.status(200).json({
       message: "Payment record fetched successfully",
       paymentRecord,
+      itemTransactions,
     });
   } catch (error) {
     console.error("Error fetching payment record:", error);
@@ -221,9 +252,15 @@ export const getPaymentRecordById = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// UPDATE PAYMENT RECORD (Admin Only) - Accept/Reject Items
+// ─────────────────────────────────────────────────────────────────────
 export const updatePaymentRecordById = async (req, res, next) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { action, acceptedItemIds, rejectionReason } = req.body;
+  // action: "accept" | "reject"
+  // acceptedItemIds: string[] — the item subdoc _ids admin checked (for accept)
+  // rejectionReason: string (for reject)
 
   if (!id) {
     const err = new Error("Payment record ID is required");
@@ -231,14 +268,20 @@ export const updatePaymentRecordById = async (req, res, next) => {
     return next(err);
   }
 
-  if (!status) {
-    const err = new Error("Status is required");
+  if (!action || !["accept", "reject"].includes(action)) {
+    const err = new Error("action must be 'accept' or 'reject'");
     err.statusCode = 400;
     return next(err);
   }
 
-  if (!["pending", "accepted", "rejected"].includes(status)) {
-    const err = new Error("Invalid status");
+  if (action === "accept" && (!acceptedItemIds || !Array.isArray(acceptedItemIds) || acceptedItemIds.length === 0)) {
+    const err = new Error("acceptedItemIds is required for accept action");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  if (action === "reject" && !rejectionReason) {
+    const err = new Error("rejectionReason is required for reject action");
     err.statusCode = 400;
     return next(err);
   }
@@ -251,12 +294,101 @@ export const updatePaymentRecordById = async (req, res, next) => {
       return next(err);
     }
 
-    paymentRecord.status = status;
+    // ── REJECT ALL ──────────────────────────────────────────────────
+    if (action === "reject") {
+      paymentRecord.items.forEach((item) => {
+        if (item.status === "pending") item.status = "rejected";
+      });
+      paymentRecord.status = "rejected";
+      paymentRecord.rejectionReason = rejectionReason;
+      paymentRecord.rejectedAt = new Date();
+      paymentRecord.rejectedBy = req.user.id;
+
+      await paymentRecord.save();
+
+      const populatedRecord = await PaymentRecord.findById(paymentRecord._id)
+        .populate("classId", "name")
+        .populate("items.itemId", "name")
+        .populate("rejectedBy", "fullName email");
+
+      return res.status(200).json({
+        message: "Payment record rejected",
+        paymentRecord: populatedRecord,
+      });
+    }
+
+    // ── ACCEPT SELECTED ITEMS ────────────────────────────────────────
+    const newlyAcceptedItems = [];
+
+    paymentRecord.items.forEach((item) => {
+      const isSelected = acceptedItemIds.includes(item._id.toString());
+      // Only accept items that are still pending — never downgrade already-accepted/rejected
+      if (isSelected && item.status === "pending") {
+        item.status = "accepted";
+        newlyAcceptedItems.push(item);
+      }
+    });
+
+    paymentRecord.status = "accepted";
+    paymentRecord.acceptedAt = new Date();
+    paymentRecord.acceptedBy = req.user.id;
+
     await paymentRecord.save();
 
+    // ── AUTO-CREATE ITEM TRANSACTIONS ────────────────────────────────
+    const transactionDocs = [];
+
+    for (const item of newlyAcceptedItems) {
+      // Find all roles that handle this item
+      const roles = await Role.find({ itemIds: item.itemId });
+      const roleIds = roles.map((r) => r._id);
+
+      // Find all active staff assigned those roles
+      const staffMembers = await User.find({
+        roles: { $in: roleIds },
+        userType: "staff",
+        status: "active",
+      });
+
+      const staffIds = staffMembers.map((s) => s._id);
+
+      transactionDocs.push({
+        paymentRecordId: paymentRecord._id,
+        itemId: item.itemId,
+        quantity: item.quantity,
+        amountAtPayment: item.amountAtPayment,
+        staffIds,
+        status: staffIds.length > 0 ? "pending" : "unassigned",
+        statusHistory: [
+          {
+            status: staffIds.length > 0 ? "pending" : "unassigned",
+            changedBy: req.user.id,
+            changedAt: new Date(),
+            reason: "Created on payment acceptance",
+          },
+        ],
+      });
+    }
+
+    const createdTransactions = await ItemTransaction.insertMany(transactionDocs);
+
+    // Populate response for easier frontend use
+    const populatedRecord = await PaymentRecord.findById(paymentRecord._id)
+      .populate("classId", "name")
+      .populate("items.itemId", "name")
+      .populate("acceptedBy", "fullName email");
+
+    const populatedTransactions = await ItemTransaction.find({
+      paymentRecordId: paymentRecord._id,
+      _id: { $in: createdTransactions.map((t) => t._id) },
+    })
+      .populate("itemId", "name")
+      .populate("staffIds", "fullName email");
+
     return res.status(200).json({
-      message: "Payment record status updated successfully",
-      paymentRecord,
+      message: "Payment record accepted",
+      paymentRecord: populatedRecord,
+      createdTransactions: populatedTransactions,
     });
   } catch (error) {
     console.error("Error updating payment record:", error);
