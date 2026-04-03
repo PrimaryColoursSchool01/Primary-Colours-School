@@ -15,7 +15,10 @@ export const refreshToken = async () => {
   return data;
 };
 
-export const changePassword = async (payload) => {
-  const { data } = await api.patch("/auth/change-password", payload);
+export const changePassword = async (currentPassword, newPassword) => {
+  const { data } = await api.post("/auth/change-password", {
+    currentPassword,
+    newPassword,
+  });
   return data;
 };
