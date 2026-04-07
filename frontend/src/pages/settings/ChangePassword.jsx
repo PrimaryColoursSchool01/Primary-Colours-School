@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { Eye, EyeOff, Loader2, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { changePassword } from "@/services/auth.service";
+import { changePassword, logout } from "@/services/auth.service";
 
 const schema = z
   .object({
@@ -21,6 +22,7 @@ const schema = z
   });
 
 export default function ChangePassword() {
+  const navigate = useNavigate();
   const [show, setShow] = useState({ current: false, new: false, confirm: false });
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +30,7 @@ export default function ChangePassword() {
     register,
     handleSubmit,
     formState: { errors },
+    // eslint-disable-next-line no-unused-vars
     reset,
   } = useForm({ resolver: zodResolver(schema) });
 
@@ -35,8 +38,16 @@ export default function ChangePassword() {
     setLoading(true);
     try {
       await changePassword(data.currentPassword, data.newPassword);
-      toast.success("Password updated successfully");
-      reset();
+
+      // Show success message
+      toast.success("Password updated successfully. Logging out...");
+
+      // Wait 1.5 seconds so user sees the message
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Then logout and redirect
+      await logout();
+      navigate("/login", { replace: true });
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to change password");
     } finally {
@@ -147,7 +158,7 @@ export default function ChangePassword() {
 
         {/* Security Note */}
         <p className="text-xs text-center text-slate-400 dark:text-slate-500 px-4">
-          For security, you may need to log in again after changing your password.
+          For security, you will be logged out and redirected to the login page after updating.
         </p>
       </div>
     </div>

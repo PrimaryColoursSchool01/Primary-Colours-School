@@ -211,7 +211,7 @@ export const changePassword = async (req, res, next) => {
 
     if (!isMatch) {
       const err = new Error("Current password is incorrect");
-      err.statusCode = 401;
+      err.statusCode = 400;
       return next(err);
     }
 

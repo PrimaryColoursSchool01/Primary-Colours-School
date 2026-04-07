@@ -1,4 +1,5 @@
 import api from "./api";
+import { useAuthStore } from "@/store/store";
 
 export const login = async (payload) => {
   const { data } = await api.post("/auth/login", payload);
@@ -6,8 +7,13 @@ export const login = async (payload) => {
 };
 
 export const logout = async () => {
-  const { data } = await api.post("/auth/logout");
-  return data;
+  try {
+    await api.post("/auth/logout");
+  } catch (error) {
+    console.error("Logout backend error:", error);
+  } finally {
+    useAuthStore.getState().logout();
+  }
 };
 
 export const refreshToken = async () => {

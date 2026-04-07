@@ -9,11 +9,16 @@ export const useAuthStore = create(
 
       setAuth: (user, accessToken) => set({ user, accessToken }),
       setAccessToken: (accessToken) => set({ accessToken }),
-      logout: () => set({ user: null, accessToken: null }),
+
+      logout: () => {
+        // Clear Zustand state
+        set({ user: null, accessToken: null });
+        // Explicitly remove persisted storage
+        localStorage.removeItem("findora-auth");
+      },
     }),
     {
       name: "findora-auth",
-      // Persist both user and accessToken
       partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
     },
   ),
