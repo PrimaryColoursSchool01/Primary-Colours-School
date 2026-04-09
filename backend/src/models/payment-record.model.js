@@ -50,7 +50,18 @@ const paymentRecordSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// ── PERFORMANCE INDEXES ─────────────────────────────────────────────
+//  Primary report filter: date range + status + class
 paymentRecordSchema.index({ dateOfPayment: 1, status: 1, classId: 1 });
+
+//  Item-level aggregation: filter by item status + lookup by itemId
+paymentRecordSchema.index({ "items.status": 1, "items.itemId": 1 });
+
+//  Mode of payment breakdown (for paymentModes report)
+paymentRecordSchema.index({ modeOfPayment: 1, dateOfPayment: 1 });
+
+//  Text search on child/payer names (optional but useful for future)
+paymentRecordSchema.index({ nameOfChild: "text", nameOfPayerOrCompany: "text" });
 
 const PaymentRecord = mongoose.model("PaymentRecord", paymentRecordSchema);
 export default PaymentRecord;

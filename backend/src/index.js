@@ -62,7 +62,7 @@ app.use("/roles", roleRoutes);
 app.use("/payment-records", paymentRecordRoutes);
 app.use("/users", userRoutes);
 app.use("/dashboard", dashboardRoutes);
-app.use("/api/reports", reportRouter);
+app.use("/reports", reportRouter);
 
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);
