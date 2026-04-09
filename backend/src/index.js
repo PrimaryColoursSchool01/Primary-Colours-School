@@ -19,6 +19,7 @@ import roleRoutes from "./routes/role.route.js";
 import paymentRecordRoutes from "./routes/payment-record.route.js";
 import userRoutes from "./routes/user.route.js";
 import dashboardRoutes from "./routes/dashboard.route.js";
+import reportRouter from "./routes/reports.route.js";
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -61,6 +62,7 @@ app.use("/roles", roleRoutes);
 app.use("/payment-records", paymentRecordRoutes);
 app.use("/users", userRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/api/reports", reportRouter);
 
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);

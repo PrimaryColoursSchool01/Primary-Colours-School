@@ -50,5 +50,7 @@ const paymentRecordSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+paymentRecordSchema.index({ dateOfPayment: 1, status: 1, classId: 1 });
+
 const PaymentRecord = mongoose.model("PaymentRecord", paymentRecordSchema);
 export default PaymentRecord;
