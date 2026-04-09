@@ -34,6 +34,11 @@ const userSchema = new mongoose.Schema(
       enum: ["active", "suspended"],
       default: "active",
     },
+    phone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     suspendedAt: Date,
     refreshToken: {
       type: String,
