@@ -8,7 +8,6 @@ import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
 
 // ─── Login ───────────────────────────────────────────────────────────────────
-
 export const login = async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -33,7 +32,6 @@ export const login = async (req, res, next) => {
       return next(err);
     }
 
-    // Check if user is suspended
     if (user.status === "suspended") {
       const err = new Error("Account is suspended. Contact administrator.");
       err.statusCode = 403;
@@ -57,8 +55,8 @@ export const login = async (req, res, next) => {
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: isProd, // true = HTTPS only
-      sameSite: isProd ? "none" : "lax", // ← This is the key fix
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -82,7 +80,6 @@ export const login = async (req, res, next) => {
 };
 
 // ─── Forgot Password ─────────────────────────────────────────────────────────
-
 export const forgotPassword = async (req, res, next) => {
   const { email } = req.body;
 
@@ -136,7 +133,6 @@ export const forgotPassword = async (req, res, next) => {
 };
 
 // ─── Reset Password With Token ───────────────────────────────────────────────
-
 export const resetPasswordWithToken = async (req, res, next) => {
   const { token, newPassword } = req.body;
 
@@ -168,9 +164,17 @@ export const resetPasswordWithToken = async (req, res, next) => {
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    user.tokenVersion += 1; // Invalidate existing sessions
-
+    user.tokenVersion += 1;
     await user.save();
+
+    //  Clear refresh cookie for clean UX
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+    });
 
     return res.json({ message: "Password has been reset successfully" });
   } catch (error) {
@@ -181,7 +185,6 @@ export const resetPasswordWithToken = async (req, res, next) => {
 };
 
 // ─── Change Password (When Logged In) ────────────────────────────────────────
-
 export const changePassword = async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
   const userId = req.user.id;
@@ -219,6 +222,15 @@ export const changePassword = async (req, res, next) => {
     user.tokenVersion += 1;
     await user.save();
 
+    // Optional: Clear refresh cookie for clean UX
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+    });
+
     return res.json({ message: "Password changed successfully" });
   } catch (error) {
     console.error("Change Password Error:", error);
@@ -228,7 +240,6 @@ export const changePassword = async (req, res, next) => {
 };
 
 // ─── Refresh Token ───────────────────────────────────────────────────────────
-
 export const refreshToken = async (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
 
@@ -257,13 +268,12 @@ export const refreshToken = async (req, res, next) => {
     const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken(user);
 
-    // Update DB with NEW refresh token
     user.refreshToken = newRefreshToken;
     await user.save();
 
     const isProd = process.env.NODE_ENV === "production";
 
-    // Send the NEW token in the cookie
+    // Send the NEW token
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: isProd,
@@ -291,12 +301,10 @@ export const refreshToken = async (req, res, next) => {
 };
 
 // ─── Logout ──────────────────────────────────────────────────────────────────
-
 export const logout = async (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
   const isProd = process.env.NODE_ENV === "production";
 
-  // Cookie config: match the settings used when the cookie was set
   const cookieConfig = {
     httpOnly: true,
     secure: isProd,

@@ -7,7 +7,7 @@ export const generateAccessToken = (user) => {
       tokenVersion: user.tokenVersion || 0,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "15m" },
+    { expiresIn: "1m" },
   );
 };
 
