@@ -21,13 +21,13 @@ const staffNavGroups = [
   },
   {
     label: "Account",
-    items: [{ title: "Profile", url: "/profile", icon: User }],
+    items: [{ title: "Profile", url: "/staff/profile", icon: User }],
   },
 ];
 
 // ─── Sidebar content ──────────────────────────────────────────────────────────
 
-function SidebarContent({ onClose, onLogout }) {
+function SidebarContent({ onClose, onLogout, user, initials }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -40,7 +40,6 @@ function SidebarContent({ onClose, onLogout }) {
               <p className="text-slate-500 text-[10px] mt-0.5 font-medium uppercase tracking-wider">Staff Panel</p>
             </div>
           </div>
-          {/* Close button — mobile only */}
           {onClose && (
             <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-600 transition-colors p-1">
               <X size={18} />
@@ -49,19 +48,31 @@ function SidebarContent({ onClose, onLogout }) {
         </div>
       </div>
 
+      {/* User identity card */}
+      <div className="mx-3 mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-[#136dec] flex items-center justify-center text-white text-xs font-black shrink-0">
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900 truncate leading-none">{user?.fullName || "Staff"}</p>
+          <p className="text-xs text-slate-500 mt-1">Staff Member</p>
+        </div>
+      </div>
+
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5 custom-scrollbar">
+      <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-6 custom-scrollbar">
         {staffNavGroups.map((group) => (
           <div key={group.label}>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 px-3 mb-1.5">{group.label}</p>
-            <ul className="space-y-0.5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 px-3 mb-2">{group.label}</p>
+            <ul className="space-y-1">
               {group.items.map((item) => (
                 <li key={item.title}>
                   <NavLink
                     to={item.url}
+                    end={item.url === "/staff"}
                     onClick={onClose}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      `flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all ${
                         isActive
                           ? "bg-[#136dec] text-white shadow-md shadow-[#136dec]/25"
                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -86,7 +97,7 @@ function SidebarContent({ onClose, onLogout }) {
       <div className="px-3 py-4 border-t border-slate-200">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-all"
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-all"
         >
           <LogOut size={16} strokeWidth={2} />
           <span>Logout</span>
@@ -128,7 +139,7 @@ export default function StaffDashboardLayout() {
     <div className="flex h-dvh bg-[#f6f7f8] overflow-hidden">
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
       <aside className="hidden lg:flex w-60 bg-white border-r border-slate-200 flex-col flex-shrink-0 h-full custom-scrollbar">
-        <SidebarContent onLogout={handleLogout} />
+        <SidebarContent onLogout={handleLogout} user={user} initials={initials} />
       </aside>
 
       {/* ── Mobile Sidebar Drawer ────────────────────────────────────── */}
@@ -138,7 +149,7 @@ export default function StaffDashboardLayout() {
           <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
           {/* Drawer */}
           <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white lg:hidden flex flex-col shadow-2xl custom-scrollbar border-r border-slate-200">
-            <SidebarContent onClose={() => setSidebarOpen(false)} onLogout={handleLogout} />
+            <SidebarContent onClose={() => setSidebarOpen(false)} onLogout={handleLogout} user={user} initials={initials} />
           </div>
         </>
       )}

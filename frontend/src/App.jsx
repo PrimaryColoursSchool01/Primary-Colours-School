@@ -59,14 +59,7 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Toaster
-        position="top-right" // or "bottom-right", "top-center", etc.
-        theme="light" // or "dark", "system"
-        richColors // enables richer color schemes
-        closeButton // adds a close button to each toast
-        duration={3000} // default duration in ms
-        // expand={false} // expand to fill width on mobile
-      />
+      <Toaster position="top-right" theme="light" richColors closeButton duration={3000} />
       <Routes>
         {/* Public */}
         <Route
@@ -101,7 +94,7 @@ export default function App() {
           <Route path="profile" element={<Profile />} />
         </Route>
 
-        {/* Staff routes*/}
+        {/* Staff routes */}
         <Route
           path="/staff"
           element={
@@ -113,6 +106,8 @@ export default function App() {
           <Route index element={<StaffDashboard />} />
           <Route path="assignments" element={<StaffAssigments />} />
           <Route path="history" element={<StaffHistory />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="change-password" element={<ChangePassword />} />
         </Route>
 
         {/* Fallback */}
