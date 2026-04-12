@@ -18,6 +18,7 @@ import Users from "./pages/users/Users.jsx";
 import Roles from "./pages/roles/Roles.jsx";
 import Items from "./pages/items/Items.jsx";
 import ChangePassword from "./pages/settings/ChangePassword.jsx";
+import Profile from "./pages/profile/Profile.jsx";
 
 // Staff pages
 import StaffDashboard from "./pages/staff/StaffDashboard";
@@ -32,11 +33,7 @@ function ProtectedRoute({ children, allowedUserType }) {
   }
 
   if (allowedUserType && user.userType !== allowedUserType) {
-    return user.userType === "admin" ? (
-      <Navigate to="/dashboard" replace />
-    ) : (
-      <Navigate to="/staff" replace />
-    );
+    return user.userType === "admin" ? <Navigate to="/dashboard" replace /> : <Navigate to="/staff" replace />;
   }
 
   return children;
@@ -48,11 +45,7 @@ function PublicRoute({ children }) {
   const { user } = useAuthStore();
 
   if (user) {
-    return user.userType === "admin" ? (
-      <Navigate to="/dashboard" replace />
-    ) : (
-      <Navigate to="/staff" replace />
-    );
+    return user.userType === "admin" ? <Navigate to="/dashboard" replace /> : <Navigate to="/staff" replace />;
   }
 
   return children;
@@ -102,6 +95,7 @@ export default function App() {
           <Route path="roles" element={<Roles />} />
           <Route path="items" element={<Items />} />
           <Route path="change-password" element={<ChangePassword />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
 
         {/* Staff routes */}

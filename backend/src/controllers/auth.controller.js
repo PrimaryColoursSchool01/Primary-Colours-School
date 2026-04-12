@@ -57,8 +57,8 @@ export const login = async (req, res, next) => {
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: isProd,
-      sameSite: "none",
+      secure: isProd, // true = HTTPS only
+      sameSite: isProd ? "none" : "lax", // ← This is the key fix
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -257,15 +257,17 @@ export const refreshToken = async (req, res, next) => {
     const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken(user);
 
+    // Update DB with NEW refresh token
     user.refreshToken = newRefreshToken;
     await user.save();
 
     const isProd = process.env.NODE_ENV === "production";
 
+    // Send the NEW token in the cookie
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: "none",
+      sameSite: isProd ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -292,14 +294,18 @@ export const refreshToken = async (req, res, next) => {
 
 export const logout = async (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
+  const isProd = process.env.NODE_ENV === "production";
+
+  // Cookie config: match the settings used when the cookie was set
+  const cookieConfig = {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    path: "/",
+  };
 
   if (!refreshToken) {
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-      path: "/",
-    });
+    res.clearCookie("refreshToken", cookieConfig);
     return res.json({ message: "Logged out successfully" });
   }
 
@@ -314,12 +320,7 @@ export const logout = async (req, res, next) => {
   } catch (error) {
     console.error("Logout verification error:", error);
   } finally {
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-      path: "/",
-    });
+    res.clearCookie("refreshToken", cookieConfig);
   }
 
   return res.json({ message: "Logged out successfully" });

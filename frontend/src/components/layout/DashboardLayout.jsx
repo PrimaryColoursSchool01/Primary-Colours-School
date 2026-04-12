@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Bell,
+  User,
 } from "lucide-react";
 import { useAuthStore } from "@/store/store";
 import { logout } from "@/services/auth.service";
@@ -42,7 +43,10 @@ const navGroups = [
   },
   {
     label: "Account",
-    items: [{ title: "Change Password", url: "/change-password", icon: Lock }],
+    items: [
+      { title: "Profile", url: "/profile", icon: User },
+      { title: "Change Password", url: "/change-password", icon: Lock },
+    ],
   },
 ];
 
