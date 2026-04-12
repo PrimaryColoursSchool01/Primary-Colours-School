@@ -22,6 +22,9 @@ import Profile from "./pages/profile/Profile.jsx";
 
 // Staff pages
 import StaffDashboard from "./pages/staff/StaffDashboard";
+import StaffAssigments from "./pages/staff/StaffAssigments.jsx";
+import StaffHistory from "./pages/staff/StaffHistory.jsx";
+import StaffDashboardLayout from "./components/layout/StaffDashboardLayout.jsx";
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
 
@@ -98,15 +101,19 @@ export default function App() {
           <Route path="profile" element={<Profile />} />
         </Route>
 
-        {/* Staff routes */}
+        {/* Staff routes*/}
         <Route
           path="/staff"
           element={
             <ProtectedRoute allowedUserType="staff">
-              <StaffDashboard />
+              <StaffDashboardLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<StaffDashboard />} />
+          <Route path="assignments" element={<StaffAssigments />} />
+          <Route path="history" element={<StaffHistory />} />
+        </Route>
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/login" replace />} />
