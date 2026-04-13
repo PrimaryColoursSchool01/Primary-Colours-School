@@ -2,7 +2,6 @@
 import mongoose from "mongoose";
 import ItemTransaction from "../models/item-transaction.model.js";
 import PaymentRecord from "../models/payment-record.model.js";
-import Item from "../models/items-fess.model.js";
 
 // ─── Helpers: Transform data for frontend ─────────────────────────────────────
 
@@ -10,6 +9,7 @@ function transformPriorityAction(tx) {
   return {
     transactionId: tx._id,
     studentName: tx.paymentRecordId?.nameOfChild || "Unknown",
+    // Now safely accesses the nested class object
     className: tx.paymentRecordId?.classId?.name || "N/A",
     itemName: tx.itemId?.name || "Unknown Item",
     quantity: tx.quantity,
@@ -73,7 +73,7 @@ const resolveStaffPermissions = (user) => {
 
 const getScopedPaymentRecordIds = async (scopeFilters) => {
   if (scopeFilters.global) return null;
-  if (!scopeFilters.classes.length && !scopeFilters.sections.length) return [];
+  if (!scopeFilters.classes.length && !scopeFilters.sections.length) return null;
 
   const conditions = [];
   if (scopeFilters.classes.length) {
@@ -83,18 +83,31 @@ const getScopedPaymentRecordIds = async (scopeFilters) => {
     conditions.push({ sectionId: { $in: scopeFilters.sections.map((id) => new mongoose.Types.ObjectId(id)) } });
   }
 
+  if (conditions.length === 0) return null;
+
   const records = await PaymentRecord.find({ $or: conditions }).select("_id");
   return records.map((r) => r._id);
 };
 
-const buildBaseFilter = (authorizedItemIds, paymentRecordIds, extra = {}) => {
+const buildBaseFilter = (authorizedItemIds, paymentRecordIds, staffId, extra = {}) => {
+  const conditions = [];
+
+  if (authorizedItemIds.length > 0) {
+    conditions.push({ itemId: { $in: authorizedItemIds.map((id) => new mongoose.Types.ObjectId(id)) } });
+  }
+
+  if (staffId) {
+    conditions.push({ staffIds: { $in: [new mongoose.Types.ObjectId(staffId)] } });
+  }
+
+  if (conditions.length === 0) return null;
+
   const filter = {
-    itemId: { $in: authorizedItemIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    $or: conditions,
     ...extra,
   };
 
-  if (paymentRecordIds !== null) {
-    if (paymentRecordIds.length === 0) return null;
+  if (paymentRecordIds !== null && paymentRecordIds.length > 0) {
     filter.paymentRecordId = { $in: paymentRecordIds };
   }
 
@@ -106,34 +119,17 @@ const buildBaseFilter = (authorizedItemIds, paymentRecordIds, extra = {}) => {
 export const getStaffDashboard = async (req, res, next) => {
   try {
     const { authorizedItemIds, scopeFilters } = resolveStaffPermissions(req.user);
-
-    if (!authorizedItemIds.length) {
-      return res.status(200).json({
-        success: true,
-        message: "Dashboard loaded successfully",
-        data: {
-          welcome: {
-            name: req.user.fullName?.split(" ")[0] || "Staff",
-            date: new Date().toISOString().split("T")[0],
-          },
-          stats: { pending: 0, collectedToday: 0 },
-          priorityActions: [],
-        },
-      });
-    }
-
+    const staffId = req.user.id;
     const scopedPRIds = await getScopedPaymentRecordIds(scopeFilters);
 
-    const pendingFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, { status: "pending" });
+    const pendingFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, staffId, { status: "pending" });
+
     if (!pendingFilter) {
       return res.status(200).json({
         success: true,
         message: "Dashboard loaded successfully",
         data: {
-          welcome: {
-            name: req.user.fullName?.split(" ")[0] || "Staff",
-            date: new Date().toISOString().split("T")[0],
-          },
+          welcome: { name: req.user.fullName?.split(" ")[0] || "Staff", date: new Date().toISOString().split("T")[0] },
           stats: { pending: 0, collectedToday: 0 },
           priorityActions: [],
         },
@@ -145,16 +141,21 @@ export const getStaffDashboard = async (req, res, next) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
+    // Helper for collected filter
+    const collectedFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, staffId, { status: "collected" });
+    const todayFilter = collectedFilter ? { ...collectedFilter, handedOverAt: { $gte: startOfDay, $lt: endOfDay } } : { _id: null }; // Empty filter if none exists
+
     const [pendingCount, collectedTodayCount] = await Promise.all([
       ItemTransaction.countDocuments(pendingFilter),
-      ItemTransaction.countDocuments({
-        ...buildBaseFilter(authorizedItemIds, scopedPRIds, { status: "collected" }),
-        handedOverAt: { $gte: startOfDay, $lt: endOfDay },
-      }),
+      ItemTransaction.countDocuments(todayFilter),
     ]);
 
     const priorityActions = await ItemTransaction.find(pendingFilter)
-      .populate("paymentRecordId", "nameOfChild classId")
+      .populate({
+        path: "paymentRecordId",
+        select: "nameOfChild classId",
+        populate: { path: "classId", select: "name" },
+      })
       .populate("itemId", "name")
       .sort({ createdAt: 1 })
       .limit(5)
@@ -164,14 +165,8 @@ export const getStaffDashboard = async (req, res, next) => {
       success: true,
       message: "Dashboard loaded successfully",
       data: {
-        welcome: {
-          name: req.user.fullName?.split(" ")[0] || "Staff",
-          date: new Date().toISOString().split("T")[0],
-        },
-        stats: {
-          pending: pendingCount,
-          collectedToday: collectedTodayCount,
-        },
+        welcome: { name: req.user.fullName?.split(" ")[0] || "Staff", date: new Date().toISOString().split("T")[0] },
+        stats: { pending: pendingCount, collectedToday: collectedTodayCount },
         priorityActions: priorityActions.map(transformPriorityAction),
       },
     });
@@ -189,17 +184,10 @@ export const getStaffAssignments = async (req, res, next) => {
     const skip = (pageNum - 1) * limitNum;
 
     const { authorizedItemIds, scopeFilters } = resolveStaffPermissions(req.user);
-
-    if (!authorizedItemIds.length) {
-      return res.status(200).json({
-        success: true,
-        message: "Assignments fetched successfully",
-        data: { transactions: [], total: 0, page: pageNum, pages: 0 },
-      });
-    }
-
+    const staffId = req.user.id;
     const scopedPRIds = await getScopedPaymentRecordIds(scopeFilters);
-    let baseFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, { status: "pending" });
+
+    let baseFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, staffId, { status: "pending" });
 
     if (!baseFilter) {
       return res.status(200).json({
@@ -212,12 +200,19 @@ export const getStaffAssignments = async (req, res, next) => {
     if (classId) {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id.toString());
-      baseFilter.paymentRecordId.$in = baseFilter.paymentRecordId.$in.filter((id) => classPRIds.includes(id.toString()));
+      if (baseFilter.paymentRecordId?.$in) {
+        baseFilter.paymentRecordId.$in = baseFilter.paymentRecordId.$in.filter((id) => classPRIds.includes(id.toString()));
+      }
     }
 
+    // NESTED POPULATE FIX
     const [transactions, total] = await Promise.all([
       ItemTransaction.find(baseFilter)
-        .populate("paymentRecordId", "nameOfChild classId dateOfPayment")
+        .populate({
+          path: "paymentRecordId",
+          select: "nameOfChild classId dateOfPayment",
+          populate: { path: "classId", select: "name" },
+        })
         .populate("itemId", "name")
         .sort({ createdAt: 1 })
         .skip(skip)
@@ -273,13 +268,16 @@ export const markCollected = async (req, res, next) => {
       return next(err);
     }
 
-    if (!authorizedItemIds.includes(transaction.itemId._id.toString())) {
+    const isItemAuthorized =
+      authorizedItemIds.includes(transaction.itemId._id.toString()) || transaction.staffIds?.some((sid) => sid.toString() === staffId);
+
+    if (!isItemAuthorized) {
       const err = new Error("Not authorized to collect this item");
       err.statusCode = 403;
       return next(err);
     }
 
-    if (scopedPRIds !== null && !scopedPRIds.includes(transaction.paymentRecordId._id.toString())) {
+    if (scopedPRIds !== null && scopedPRIds.length > 0 && !scopedPRIds.includes(transaction.paymentRecordId._id.toString())) {
       const err = new Error("Not authorized for this class or section");
       err.statusCode = 403;
       return next(err);
@@ -320,17 +318,10 @@ export const getStaffHistory = async (req, res, next) => {
     const skip = (pageNum - 1) * limitNum;
 
     const { authorizedItemIds, scopeFilters } = resolveStaffPermissions(req.user);
-
-    if (!authorizedItemIds.length) {
-      return res.status(200).json({
-        success: true,
-        message: "History fetched successfully",
-        data: { transactions: [], total: 0, page: pageNum, pages: 0 },
-      });
-    }
-
+    const staffId = req.user.id;
     const scopedPRIds = await getScopedPaymentRecordIds(scopeFilters);
-    let baseFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, { status: "collected" });
+
+    let baseFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, staffId, { status: "collected" });
 
     if (!baseFilter) {
       return res.status(200).json({
@@ -350,15 +341,20 @@ export const getStaffHistory = async (req, res, next) => {
       }
     }
 
-    if (classId && baseFilter.paymentRecordId) {
+    if (classId && baseFilter.paymentRecordId?.$in) {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id.toString());
       baseFilter.paymentRecordId.$in = baseFilter.paymentRecordId.$in.filter((id) => classPRIds.includes(id.toString()));
     }
 
+    // NESTED POPULATE FIX
     const [transactions, total] = await Promise.all([
       ItemTransaction.find(baseFilter)
-        .populate("paymentRecordId", "nameOfChild classId")
+        .populate({
+          path: "paymentRecordId",
+          select: "nameOfChild classId",
+          populate: { path: "classId", select: "name" },
+        })
         .populate("itemId", "name")
         .populate("handedOverBy", "fullName")
         .sort({ handedOverAt: -1 })

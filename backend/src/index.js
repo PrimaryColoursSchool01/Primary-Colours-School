@@ -21,6 +21,7 @@ import userRoutes from "./routes/user.route.js";
 import dashboardRoutes from "./routes/dashboard.route.js";
 import reportRouter from "./routes/reports.route.js";
 import profileRouter from "./routes/profile.route.js";
+import staffRouter from "./routes/staff.route.js";
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -65,7 +66,7 @@ app.use("/users", userRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/reports", reportRouter);
 app.use("/profile", profileRouter);
-
+app.use("/staff", staffRouter);
 app.use((req, res, next) => {
   const err = new Error(`Can't find ${req.originalUrl} on this server!`);
   err.statusCode = 404;
