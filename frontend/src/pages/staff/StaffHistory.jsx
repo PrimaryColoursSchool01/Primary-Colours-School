@@ -1,5 +1,5 @@
 // src/pages/staff/StaffHistory.jsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { getStaffHistory } from "@/services/staff.service";
 import { Button } from "@/components/ui/button";
@@ -28,73 +28,28 @@ const styles = `
   .hist-page * { font-family: 'DM Sans', sans-serif; }
   .hist-page .df { font-family: 'Bricolage Grotesque', sans-serif; }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  @keyframes shimmer {
-    0%   { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  @keyframes rowIn {
-    from { opacity: 0; transform: translateX(-6px); }
-    to   { opacity: 1; transform: translateX(0); }
-  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  @keyframes rowIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
 
-  .fade-up   { animation: fadeUp 0.4s cubic-bezier(.22,1,.36,1) both; }
+  .fade-up { animation: fadeUp 0.4s cubic-bezier(.22,1,.36,1) both; }
   .fade-up-1 { animation: fadeUp 0.4s 0.06s cubic-bezier(.22,1,.36,1) both; }
   .fade-up-2 { animation: fadeUp 0.4s 0.12s cubic-bezier(.22,1,.36,1) both; }
-  .fade-in   { animation: fadeIn 0.25s ease both; }
+  .fade-in { animation: fadeIn 0.25s ease both; }
 
-  .skeleton {
-    background: linear-gradient(90deg, #f1f5f9 25%, #e8edf4 50%, #f1f5f9 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: 10px;
-  }
-
-  .row-item {
-    animation: rowIn 0.3s cubic-bezier(.22,1,.36,1) both;
-    transition: background 0.15s ease, box-shadow 0.15s ease;
-  }
-  .row-item:hover {
-    background: #f0fdf9 !important;
-    box-shadow: inset 3px 0 0 #10b981;
-  }
-
+  .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e8edf4 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 10px; }
+  .row-item { animation: rowIn 0.3s cubic-bezier(.22,1,.36,1) both; transition: background 0.15s ease, box-shadow 0.15s ease; }
+  .row-item:hover { background: #f0fdf9 !important; box-shadow: inset 3px 0 0 #10b981; }
   .tbl-row { transition: background 0.12s ease; }
   .tbl-row:hover { background: #f0fdf9; }
-
   .page-btn { transition: all 0.15s ease; }
-  .page-btn:hover:not(:disabled) {
-    border-color: #10b981;
-    color: #10b981;
-  }
-  .page-btn-active {
-    background: #10b981 !important;
-    color: white !important;
-    border-color: #10b981 !important;
-  }
-
-  .date-input:focus {
-    outline: none;
-    border-color: #10b981;
-    box-shadow: 0 0 0 3px rgba(16,185,129,0.12);
-  }
-
+  .page-btn:hover:not(:disabled) { border-color: #10b981; color: #10b981; }
+  .page-btn-active { background: #10b981 !important; color: white !important; border-color: #10b981 !important; }
+  .date-input:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.12); }
   .search-wrap:focus-within .search-icon { color: #10b981; }
-
-  .filter-pill {
-    transition: all 0.15s ease;
-  }
-  .filter-pill:hover {
-    border-color: #10b981;
-    color: #10b981;
-  }
+  .filter-pill { transition: all 0.15s ease; }
+  .filter-pill:hover { border-color: #10b981; color: #10b981; }
 `;
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
@@ -104,22 +59,12 @@ function avatarColor(name = "") {
 
 function formatDate(iso) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-NG", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return new Date(iso).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function formatDateTime(iso) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-NG", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return new Date(iso).toLocaleString("en-NG", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 /* ─── Mock Data Generator ─────────────────────────────────────────────────── */
@@ -209,10 +154,8 @@ function EmptyState({ filtered, onClear }) {
 /* ─── Pagination ──────────────────────────────────────────────────────────── */
 function Pagination({ page, pages, total, limit, onPage }) {
   if (pages <= 1) return null;
-
   const start = (page - 1) * limit + 1;
   const end = Math.min(page * limit, total);
-
   const range = [];
   for (let i = 1; i <= pages; i++) {
     if (i === 1 || i === pages || (i >= page - 1 && i <= page + 1)) {
@@ -221,7 +164,6 @@ function Pagination({ page, pages, total, limit, onPage }) {
       range.push("…");
     }
   }
-
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 pb-1">
       <p className="text-xs text-slate-400 font-medium">
@@ -239,7 +181,6 @@ function Pagination({ page, pages, total, limit, onPage }) {
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-
         {range.map((p, i) =>
           p === "…" ? (
             <span key={`e${i}`} className="px-1 text-slate-300 text-sm">
@@ -249,15 +190,12 @@ function Pagination({ page, pages, total, limit, onPage }) {
             <button
               key={p}
               onClick={() => onPage(p)}
-              className={`page-btn flex h-8 min-w-8 px-2 items-center justify-center rounded-lg border text-xs font-semibold ${
-                p === page ? "page-btn-active" : "border-slate-200 text-slate-600"
-              }`}
+              className={`page-btn flex h-8 min-w-8 px-2 items-center justify-center rounded-lg border text-xs font-semibold ${p === page ? "page-btn-active" : "border-slate-200 text-slate-600"}`}
             >
               {p}
             </button>
           ),
         )}
-
         <button
           className="page-btn flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
           onClick={() => onPage(page + 1)}
@@ -287,20 +225,16 @@ function NoteBadge({ note }) {
 /* ─── Main Page ───────────────────────────────────────────────────────────── */
 const LIMIT = 20;
 
-// Today and 30 days ago as default range
 function defaultDates() {
   const today = new Date();
   const prior = new Date();
   prior.setDate(today.getDate() - 30);
-  return {
-    end: today.toISOString().split("T")[0],
-    start: prior.toISOString().split("T")[0],
-  };
+  return { end: today.toISOString().split("T")[0], start: prior.toISOString().split("T")[0] };
 }
 
 export default function StaffHistory() {
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true); // Full-page loading (initial mount only)
+  const [refreshing, setRefreshing] = useState(false); // Subtle refresh indicator (search/pagination/filter updates)
   const [error, setError] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [total, setTotal] = useState(0);
@@ -312,6 +246,7 @@ export default function StaffHistory() {
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(""); // Debounced search value
   const [showFilters, setShowFilters] = useState(false);
 
   // Applied filters (only update when user clicks Apply)
@@ -322,23 +257,41 @@ export default function StaffHistory() {
   const [useMockData, setUseMockData] = useState(false);
   const [mockData, setMockData] = useState([]);
 
+  // Refs
+  const searchInputRef = useRef(null);
+
   // Generate mock data once on mount
   useEffect(() => {
     setMockData(generateMockHistory(100));
   }, []);
 
+  // Debounce search input (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const fetchHistory = useCallback(
-    async (pg = 1, silent = false) => {
+    async (pg = 1, isInitialLoad = false) => {
       try {
-        silent ? setRefreshing(true) : setLoading(true);
+        // Only set full-page loading on initial mount
+        if (isInitialLoad) {
+          setLoading(true);
+        } else {
+          // For search/pagination/filter updates, use subtle refreshing indicator
+          setRefreshing(true);
+        }
         setError(null);
 
         if (useMockData) {
-          // Mock data mode with API-style filtering
+          // Mock data mode with independent filters (mirrors backend logic)
           let filtered = [...mockData];
 
-          // Date range filter
-          if (appliedStart || appliedEnd) {
+          // Date range filter: ONLY if custom range applied (not default)
+          const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
+          if (hasCustomDateRange && (appliedStart || appliedEnd)) {
             filtered = filtered.filter((t) => {
               const tDate = new Date(t.handedOverAt);
               if (appliedStart && tDate < new Date(appliedStart)) return false;
@@ -351,9 +304,9 @@ export default function StaffHistory() {
             });
           }
 
-          // Search filter (API-style: student, item, class, staff)
-          if (search.trim()) {
-            const q = search.toLowerCase();
+          // Search filter: ALWAYS independent (only if provided)
+          if (debouncedSearch.trim()) {
+            const q = debouncedSearch.toLowerCase();
             filtered = filtered.filter(
               (t) =>
                 t.studentName?.toLowerCase().includes(q) ||
@@ -364,19 +317,26 @@ export default function StaffHistory() {
           }
 
           const totalFiltered = filtered.length;
-          const start = (pg - 1) * LIMIT;
-          const paginated = filtered.slice(start, start + LIMIT);
+          const startIdx = (pg - 1) * LIMIT;
+          const paginated = filtered.slice(startIdx, startIdx + LIMIT);
 
           setTransactions(paginated);
           setTotal(totalFiltered);
           setPage(pg);
           setPages(Math.ceil(totalFiltered / LIMIT));
         } else {
-          // Real API mode - search is API-based
+          // Real API mode - INDEPENDENT FILTERS (Stripe/HubSpot style)
           const params = { page: pg, limit: LIMIT };
-          if (appliedStart) params.startDate = appliedStart;
-          if (appliedEnd) params.endDate = appliedEnd;
-          if (search.trim()) params.search = search; // ← API-based search
+
+          // Search: ALWAYS send if provided (independent)
+          if (debouncedSearch.trim()) params.search = debouncedSearch;
+
+          // Date range: ONLY send if user explicitly applied a custom range (not default)
+          const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
+          if (hasCustomDateRange) {
+            if (appliedStart) params.startDate = appliedStart;
+            if (appliedEnd) params.endDate = appliedEnd;
+          }
 
           const res = await getStaffHistory(params);
           setTransactions(res.data.transactions || []);
@@ -388,16 +348,26 @@ export default function StaffHistory() {
         setError(err.response?.data?.message || "Failed to load history");
         toast.error("Could not load history");
       } finally {
+        // Always clear both loading states
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [useMockData, mockData, appliedStart, appliedEnd, search],
+    [useMockData, mockData, appliedStart, appliedEnd, debouncedSearch, defaults],
   );
 
+  // Initial fetch (full-page loading)
   useEffect(() => {
-    fetchHistory(1);
-  }, [appliedStart, appliedEnd, search, useMockData]);
+    fetchHistory(1, true);
+  }, []);
+
+  // Fetch when applied filters or debounced search change (subtle refreshing)
+  useEffect(() => {
+    if (!loading) {
+      // Skip if still doing initial load
+      fetchHistory(1, false);
+    }
+  }, [appliedStart, appliedEnd, debouncedSearch, useMockData]);
 
   const handleApplyFilters = () => {
     setAppliedStart(startDate);
@@ -415,15 +385,15 @@ export default function StaffHistory() {
   };
 
   const handlePage = (p) => {
-    fetchHistory(p, true);
+    fetchHistory(p, false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // Client-side search for mock data only (real API handles it server-side)
   const visible =
-    useMockData && search.trim()
+    useMockData && debouncedSearch.trim()
       ? transactions.filter((t) => {
-          const q = search.toLowerCase();
+          const q = debouncedSearch.toLowerCase();
           return (
             t.studentName?.toLowerCase().includes(q) ||
             t.itemName?.toLowerCase().includes(q) ||
@@ -433,9 +403,12 @@ export default function StaffHistory() {
         })
       : transactions;
 
-  const hasActiveFilters = appliedStart !== defaults.start || appliedEnd !== defaults.end;
+  // Only show date filter chip if custom range is applied (not default)
+  const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
+  const hasActiveFilters = hasCustomDateRange || debouncedSearch;
 
   /* ── Render ── */
+  // Only show full-page skeleton on initial load
   if (loading) return <PageSkeleton />;
 
   if (error) {
@@ -450,7 +423,7 @@ export default function StaffHistory() {
             <h2 className="df text-xl font-bold text-slate-900">Something went wrong</h2>
             <p className="mt-1 text-sm text-slate-500 max-w-xs">{error}</p>
           </div>
-          <Button onClick={() => fetchHistory(1)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl h-11">
+          <Button onClick={() => fetchHistory(1, true)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl h-11">
             Try Again
           </Button>
         </div>
@@ -472,7 +445,7 @@ export default function StaffHistory() {
                 <>
                   <span className="font-semibold text-slate-800">{total}</span> record
                   {total !== 1 ? "s" : ""} collected
-                  {appliedStart && appliedEnd && (
+                  {hasCustomDateRange && (
                     <span className="text-slate-400">
                       {" "}
                       · {formatDate(appliedStart)} – {formatDate(appliedEnd)}
@@ -480,7 +453,7 @@ export default function StaffHistory() {
                   )}
                 </>
               ) : (
-                "No records in selected range"
+                "No records found"
               )}
             </p>
           </div>
@@ -491,14 +464,13 @@ export default function StaffHistory() {
               variant={useMockData ? "default" : "outline"}
               size="sm"
               onClick={() => setUseMockData((v) => !v)}
-              className={`h-9 text-xs font-semibold ${
-                useMockData ? "bg-emerald-600 hover:bg-emerald-700" : "hover:border-emerald-500 hover:text-emerald-600"
-              }`}
+              className={`h-9 text-xs font-semibold ${useMockData ? "bg-emerald-600 hover:bg-emerald-700" : "hover:border-emerald-500 hover:text-emerald-600"}`}
             >
               <Database className="mr-1.5 h-3.5 w-3.5" />
               {useMockData ? "Mock Data" : "Use Mock"}
             </Button>
 
+            {/* Subtle refreshing indicator - only shows during search/pagination/filter updates */}
             {refreshing && (
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -515,6 +487,7 @@ export default function StaffHistory() {
             <div className="search-wrap relative flex-1">
               <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
               <Input
+                ref={searchInputRef}
                 placeholder="Search student, item, class, staff…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -533,15 +506,11 @@ export default function StaffHistory() {
             {/* Date filter toggle */}
             <button
               onClick={() => setShowFilters((v) => !v)}
-              className={`filter-pill flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-all ${
-                showFilters || hasActiveFilters
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-slate-200 bg-white text-slate-600"
-              }`}
+              className={`filter-pill flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-all ${showFilters || hasCustomDateRange ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-200 bg-white text-slate-600"}`}
             >
               <SlidersHorizontal className="h-4 w-4" />
               <span className="hidden sm:inline">Date Range</span>
-              {hasActiveFilters && !showFilters && (
+              {hasCustomDateRange && !showFilters && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/30 text-xs font-bold">✓</span>
               )}
             </button>
@@ -598,9 +567,9 @@ export default function StaffHistory() {
           )}
 
           {/* Active filter chips */}
-          {(hasActiveFilters || search) && (
+          {hasActiveFilters && (
             <div className="fade-in flex flex-wrap items-center gap-2">
-              {hasActiveFilters && (
+              {hasCustomDateRange && (
                 <span className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
                   <Calendar className="h-3 w-3" />
                   {formatDate(appliedStart)} – {formatDate(appliedEnd)}
@@ -609,9 +578,9 @@ export default function StaffHistory() {
                   </button>
                 </span>
               )}
-              {search && (
+              {debouncedSearch && (
                 <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                  "{search}"
+                  "{debouncedSearch}"
                   <button onClick={() => setSearch("")}>
                     <X className="h-3 w-3" />
                   </button>
@@ -633,7 +602,7 @@ export default function StaffHistory() {
         <div className="fade-up-2">
           {visible.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <EmptyState filtered={hasActiveFilters || !!search} onClear={handleClearFilters} />
+              <EmptyState filtered={hasActiveFilters} onClear={handleClearFilters} />
             </div>
           ) : (
             <>
@@ -654,7 +623,6 @@ export default function StaffHistory() {
                   <tbody className="divide-y divide-slate-50">
                     {visible.map((tx, idx) => (
                       <tr key={tx.id} className="tbl-row" style={{ animationDelay: `${idx * 25}ms` }}>
-                        {/* Student */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <div
@@ -666,11 +634,9 @@ export default function StaffHistory() {
                             <span className="font-semibold text-slate-900 truncate max-w-[140px]">{tx.studentName}</span>
                           </div>
                         </td>
-                        {/* Class */}
                         <td className="px-4 py-3.5">
                           <span className="text-slate-600 font-medium text-xs">{tx.className}</span>
                         </td>
-                        {/* Item */}
                         <td className="px-4 py-3.5">
                           <span
                             className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold"
@@ -680,25 +646,21 @@ export default function StaffHistory() {
                             {tx.itemName}
                           </span>
                         </td>
-                        {/* Qty */}
                         <td className="px-4 py-3.5 text-center">
                           <span className="font-bold text-slate-800">{tx.quantity}</span>
                         </td>
-                        {/* Handed over by */}
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
                             <User className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
                             <span className="text-slate-600 text-xs truncate max-w-[120px]">{tx.handedOverBy}</span>
                           </div>
                         </td>
-                        {/* Date & Time */}
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
                             <span className="text-slate-500 text-xs whitespace-nowrap">{formatDateTime(tx.handedOverAt)}</span>
                           </div>
                         </td>
-                        {/* Note */}
                         <td className="px-5 py-3.5">
                           <NoteBadge note={tx.note} />
                         </td>
@@ -722,7 +684,6 @@ export default function StaffHistory() {
                     className="row-item rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                     style={{ animationDelay: `${idx * 40}ms` }}
                   >
-                    {/* Top row: avatar + name + collected badge */}
                     <div className="flex items-center gap-3">
                       <div
                         className="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
@@ -734,7 +695,6 @@ export default function StaffHistory() {
                         <p className="font-semibold text-slate-900 text-sm truncate">{tx.studentName}</p>
                         <p className="text-xs text-slate-400 font-medium">{tx.className}</p>
                       </div>
-                      {/* Collected badge */}
                       <span
                         className="flex-shrink-0 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
                         style={{ background: "#d1fae5", color: "#065f46" }}
@@ -743,8 +703,6 @@ export default function StaffHistory() {
                         Collected
                       </span>
                     </div>
-
-                    {/* Middle: item + qty */}
                     <div className="mt-3 flex flex-wrap items-center gap-2 pl-[52px]">
                       <span
                         className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold"
@@ -757,8 +715,6 @@ export default function StaffHistory() {
                         × {tx.quantity}
                       </span>
                     </div>
-
-                    {/* Bottom: staff + datetime + note */}
                     <div className="mt-2.5 pl-[52px] space-y-1">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span className="flex items-center gap-1 text-xs text-slate-400">

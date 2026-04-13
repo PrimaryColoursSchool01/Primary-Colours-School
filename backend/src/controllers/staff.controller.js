@@ -324,6 +324,7 @@ export const getStaffHistory = async (req, res, next) => {
     const staffId = req.user.id;
     const scopedPRIds = await getScopedPaymentRecordIds(scopeFilters);
 
+    // ─── 1. BASE FILTER: Auth + Scope + Status (always applied) ─────────
     let baseFilter = buildBaseFilter(authorizedItemIds, scopedPRIds, staffId, { status: "collected" });
 
     if (!baseFilter) {
@@ -334,30 +335,40 @@ export const getStaffHistory = async (req, res, next) => {
       });
     }
 
-    // ─── DATE RANGE FILTER ───────────────────────────────────────────
+    // ─── 2. INDEPENDENT FILTERS: Only add if explicitly provided ───────
+    const activeFilters = [baseFilter]; // Start with base auth/scope filter
+
+    // Date range filter (only if BOTH dates provided, or at least one is explicitly set)
     if (startDate || endDate) {
-      baseFilter.handedOverAt = {};
-      if (startDate) baseFilter.handedOverAt.$gte = new Date(startDate);
+      const dateFilter = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        baseFilter.handedOverAt.$lte = end;
+        dateFilter.$lte = end;
       }
+      activeFilters.push({ handedOverAt: dateFilter });
     }
 
-    // ─── CLASS FILTER ────────────────────────────────────────────────
+    // Class filter (only if classId provided AND baseFilter has paymentRecordId.$in)
     if (classId && baseFilter.paymentRecordId?.$in) {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id.toString());
-      baseFilter.paymentRecordId.$in = baseFilter.paymentRecordId.$in.filter((id) => classPRIds.includes(id.toString()));
+      const filteredPRIds = baseFilter.paymentRecordId.$in.filter((id) => classPRIds.includes(id.toString()));
+
+      if (filteredPRIds.length > 0) {
+        activeFilters.push({ paymentRecordId: { $in: filteredPRIds } });
+      } else {
+        // No matching classes → force empty result
+        activeFilters.push({ _id: new mongoose.Types.ObjectId("000000000000000000000000") });
+      }
     }
 
-    // ─── SEARCH FILTER (NEW) ─────────────────────────────────────────
-    const searchFilter = {};
+    // Search filter (only if search provided)
     if (search && search.trim()) {
       const q = search.trim();
 
-      // Parallel lookups across related collections
+      // Parallel lookups across related collections for performance
       const [matchingPRs, matchingItems, matchingStaff] = await Promise.all([
         PaymentRecord.find({ nameOfChild: { $regex: q, $options: "i" } }).select("_id"),
         Item.find({ name: { $regex: q, $options: "i" } }).select("_id"),
@@ -371,17 +382,19 @@ export const getStaffHistory = async (req, res, next) => {
 
       if (searchConditions.length === 0) {
         // No matches found anywhere → force empty result
-        searchFilter._id = new mongoose.Types.ObjectId("000000000000000000000000");
+        activeFilters.push({ _id: new mongoose.Types.ObjectId("000000000000000000000000") });
       } else {
-        searchFilter.$or = searchConditions;
+        activeFilters.push({ $or: searchConditions });
       }
     }
 
-    // ─── COMBINE FILTERS SAFELY ──────────────────────────────────────
-    // Use $and to ensure auth/scope filters AND search filters both apply
-    const finalFilter = Object.keys(searchFilter).length > 0 ? { $and: [baseFilter, searchFilter] } : baseFilter;
+    // ─── 3. COMBINE ALL ACTIVE FILTERS WITH $and ───────────────────────
+    const finalFilter =
+      activeFilters.length === 1
+        ? activeFilters[0] // Only base filter → no $and needed
+        : { $and: activeFilters }; // Multiple filters → combine safely
 
-    // ─── EXECUTE QUERIES ─────────────────────────────────────────────
+    // ─── 4. EXECUTE QUERIES ────────────────────────────────────────────
     const [transactions, total] = await Promise.all([
       ItemTransaction.find(finalFilter)
         .populate({
