@@ -347,7 +347,6 @@ export const updatePaymentRecordById = async (req, res, next) => {
       const staffMembers = await User.find({
         roles: { $in: roleIds },
         userType: "staff",
-        status: "active",
       });
 
       const staffIds = staffMembers.map((s) => s._id);

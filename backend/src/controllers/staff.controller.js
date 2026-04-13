@@ -381,3 +381,62 @@ export const getStaffHistory = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getStaffClasses = async (req, res, next) => {
+  try {
+    const { scopeFilters } = resolveStaffPermissions(req.user);
+
+    // DEBUG: Log what permissions were resolved
+    console.log("DEBUG getStaffClasses:", {
+      userId: req.user._id,
+      roles: req.user.roles?.map((r) => ({
+        name: r.name,
+        scope: r.scope,
+        sectionId: r.sectionId,
+        classIds: r.classIds,
+      })),
+      scopeFilters,
+    });
+
+    // Global scope: return all classes (remove status filter if your Class model doesn't have it)
+    if (scopeFilters.global) {
+      const classes = await Class.find({}).select("_id name").sort({ name: 1 });
+
+      return res.status(200).json({
+        success: true,
+        message: "Classes fetched successfully",
+        data: { classes },
+      });
+    }
+
+    // Section or class scope: filter by allowed IDs
+    const conditions = [];
+
+    if (scopeFilters.sections.length > 0) {
+      conditions.push({ sectionId: { $in: scopeFilters.sections } });
+    }
+    if (scopeFilters.classes.length > 0) {
+      conditions.push({ _id: { $in: scopeFilters.classes } });
+    }
+
+    if (conditions.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Classes fetched successfully",
+        data: { classes: [] },
+      });
+    }
+
+    // Remove status filter if your Class model doesn't have it
+    const classes = await Class.find({ $or: conditions }).select("_id name").sort({ name: 1 });
+
+    return res.status(200).json({
+      success: true,
+      message: "Classes fetched successfully",
+      data: { classes },
+    });
+  } catch (error) {
+    console.error("Error fetching staff classes:", error);
+    next(error);
+  }
+};

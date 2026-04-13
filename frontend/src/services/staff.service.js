@@ -21,3 +21,8 @@ export const getStaffHistory = async (params = {}) => {
   const { data } = await api.get("/staff/history", { params });
   return data;
 };
+
+export const getStaffClasses = async () => {
+  const { data } = await api.get("/staff/classes");
+  return data;
+};

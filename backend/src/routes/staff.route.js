@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireRole } from "../middlewares/requireRole.js";
-import { getStaffDashboard, getStaffAssignments, markCollected, getStaffHistory } from "../controllers/staff.controller.js";
+import {
+  getStaffDashboard,
+  getStaffAssignments,
+  markCollected,
+  getStaffHistory,
+  getStaffClasses,
+} from "../controllers/staff.controller.js";
 
 const router = Router();
 
@@ -20,5 +26,8 @@ router.post("/transactions/:id/collect", markCollected);
 
 // History: read-only log of processed items
 router.get("/history", getStaffHistory);
+
+// Staff Classes: view and manage assigned classes (optional future feature)
+router.get("/classes", getStaffClasses);
 
 export default router;
