@@ -2,6 +2,9 @@
 import mongoose from "mongoose";
 import ItemTransaction from "../models/item-transaction.model.js";
 import PaymentRecord from "../models/payment-record.model.js";
+import Item from "../models/items-fess.model.js";
+import Class from "../models/class.model.js";
+import User from "../models/user.model.js";
 
 // ─── Helpers: Transform data for frontend ─────────────────────────────────────
 
@@ -312,7 +315,7 @@ export const markCollected = async (req, res, next) => {
 
 export const getStaffHistory = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, startDate, endDate, classId } = req.query;
+    const { page = 1, limit = 20, startDate, endDate, classId, search } = req.query;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
@@ -331,6 +334,7 @@ export const getStaffHistory = async (req, res, next) => {
       });
     }
 
+    // ─── DATE RANGE FILTER ───────────────────────────────────────────
     if (startDate || endDate) {
       baseFilter.handedOverAt = {};
       if (startDate) baseFilter.handedOverAt.$gte = new Date(startDate);
@@ -341,15 +345,45 @@ export const getStaffHistory = async (req, res, next) => {
       }
     }
 
+    // ─── CLASS FILTER ────────────────────────────────────────────────
     if (classId && baseFilter.paymentRecordId?.$in) {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id.toString());
       baseFilter.paymentRecordId.$in = baseFilter.paymentRecordId.$in.filter((id) => classPRIds.includes(id.toString()));
     }
 
-    // NESTED POPULATE FIX
+    // ─── SEARCH FILTER (NEW) ─────────────────────────────────────────
+    const searchFilter = {};
+    if (search && search.trim()) {
+      const q = search.trim();
+
+      // Parallel lookups across related collections
+      const [matchingPRs, matchingItems, matchingStaff] = await Promise.all([
+        PaymentRecord.find({ nameOfChild: { $regex: q, $options: "i" } }).select("_id"),
+        Item.find({ name: { $regex: q, $options: "i" } }).select("_id"),
+        User.find({ fullName: { $regex: q, $options: "i" } }).select("_id"),
+      ]);
+
+      const searchConditions = [];
+      if (matchingPRs.length) searchConditions.push({ paymentRecordId: { $in: matchingPRs.map((r) => r._id) } });
+      if (matchingItems.length) searchConditions.push({ itemId: { $in: matchingItems.map((i) => i._id) } });
+      if (matchingStaff.length) searchConditions.push({ handedOverBy: { $in: matchingStaff.map((u) => u._id) } });
+
+      if (searchConditions.length === 0) {
+        // No matches found anywhere → force empty result
+        searchFilter._id = new mongoose.Types.ObjectId("000000000000000000000000");
+      } else {
+        searchFilter.$or = searchConditions;
+      }
+    }
+
+    // ─── COMBINE FILTERS SAFELY ──────────────────────────────────────
+    // Use $and to ensure auth/scope filters AND search filters both apply
+    const finalFilter = Object.keys(searchFilter).length > 0 ? { $and: [baseFilter, searchFilter] } : baseFilter;
+
+    // ─── EXECUTE QUERIES ─────────────────────────────────────────────
     const [transactions, total] = await Promise.all([
-      ItemTransaction.find(baseFilter)
+      ItemTransaction.find(finalFilter)
         .populate({
           path: "paymentRecordId",
           select: "nameOfChild classId",
@@ -361,7 +395,7 @@ export const getStaffHistory = async (req, res, next) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      ItemTransaction.countDocuments(baseFilter),
+      ItemTransaction.countDocuments(finalFilter),
     ]);
 
     const pages = Math.ceil(total / limitNum);
