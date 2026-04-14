@@ -15,6 +15,7 @@ import {
   Cloud,
   AlertTriangle,
   RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getDashboardData, getRecentResponses } from "@/services/dashboard.service";
@@ -23,30 +24,27 @@ import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-const formatCurrency = (amount) => `₦${amount?.toLocaleString() ?? "0"}`;
+const formatCompactCurrency = (amount, currency = "₦") => {
+  if (!amount && amount !== 0) return `${currency}0`;
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000_000) return `${currency}${(amount / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  if (abs >= 1_000_000) return `${currency}${(amount / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (abs >= 1_000) return `${currency}${(amount / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return `${currency}${amount.toLocaleString()}`;
+};
 
 const getStatusBadgeConfig = (status) => {
   const configs = {
     accepted: { bg: "bg-emerald-50 text-emerald-700", border: "border-emerald-200", label: "Accepted" },
     pending: { bg: "bg-amber-50 text-amber-700", border: "border-amber-200", label: "Pending" },
     rejected: { bg: "bg-rose-50 text-rose-600", border: "border-rose-200", label: "Rejected" },
+    partially_accepted: { bg: "bg-orange-50 text-orange-700", border: "border-orange-200", label: "Partial" },
   };
   return configs[status] || configs.pending;
 };
 
-const PAYMENT_MODE_COLORS = {
-  bank: "#136dec",
-  cash: "#22c55e",
-  pos: "#f59e0b",
-  other: "#64748b",
-};
-
-const PAYMENT_MODE_LABELS = {
-  bank: "Bank Transfer",
-  cash: "Cash",
-  pos: "POS",
-  other: "Other",
-};
+const PAYMENT_MODE_COLORS = { bank: "#136dec", cash: "#22c55e", pos: "#f59e0b", other: "#64748b" };
+const PAYMENT_MODE_LABELS = { bank: "Bank Transfer", cash: "Cash", pos: "POS", other: "Other" };
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -111,99 +109,107 @@ function PipelineStage({ stage }) {
   );
 }
 
-// ─── PDF Export Handler (Same pattern as Reports.jsx) ──────────────────────
-const handleExportPDF = (dashboardData, filters) => {
+// ─── PDF Export Handler (FIXED) ──────────────────────────────────────────────
+const handleExportPDF = (dashboardData) => {
   if (!dashboardData) return toast.error("No data to export");
-
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 14;
   const contentW = pageW - margin * 2;
 
-  const BLUE = [19, 109, 236];
-  const BLUE_DARK = [12, 85, 180];
-  const BLUE_LIGHT = [235, 244, 255];
-  const SLATE_900 = [15, 23, 42];
-  const SLATE_600 = [71, 85, 105];
-  const SLATE_400 = [148, 163, 184];
-  const SLATE_50 = [248, 250, 252];
-  const WHITE = [255, 255, 255];
-  const GREEN = [22, 163, 74];
-  const AMBER = [217, 119, 6];
-  const RED = [220, 38, 38];
+  // Color constants as individual RGB values for jsPDF compatibility
+  const BLUE = { r: 19, g: 109, b: 236 };
+  const BLUE_DARK = { r: 12, g: 85, b: 180 };
+  const BLUE_LIGHT = { r: 235, g: 244, b: 255 };
+  const SLATE_900 = { r: 15, g: 23, b: 42 };
+  const SLATE_600 = { r: 71, g: 85, b: 105 };
+  const SLATE_400 = { r: 148, g: 163, b: 184 };
+  const SLATE_50 = { r: 248, g: 250, b: 252 };
+  const WHITE = { r: 255, g: 255, b: 255 };
+  const GREEN = { r: 22, g: 163, b: 74 };
+  const AMBER = { r: 217, g: 119, b: 6 };
+  const RED = { r: 220, g: 38, b: 38 };
+  const ORANGE = { r: 249, g: 115, b: 22 }; // For partially_accepted
 
-  const filledRect = (x, y, w, h, r, fillColor) => {
-    doc.setFillColor(...fillColor);
+  // Helper to set text color safely
+  const setTextColorSafe = (color) => {
+    doc.setTextColor(color.r, color.g, color.b);
+  };
+
+  const filledRect = (x, y, w, h, r, c) => {
+    doc.setFillColor(c.r, c.g, c.b);
     doc.roundedRect(x, y, w, h, r, r, "F");
   };
 
   const sectionHeading = (label, y) => {
     filledRect(margin, y, contentW, 8, 2, BLUE_LIGHT);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...BLUE);
+    doc.setFontSize(9).setFont("helvetica", "bold");
+    setTextColorSafe(BLUE);
     doc.text(label, margin + 4, y + 5.5);
     return y + 13;
   };
 
-  const formatCurrencyPDF = (amount) => {
-    const num = typeof amount === "number" ? amount : 0;
+  const formatCurrencyPDF = (amt) => {
+    const num = typeof amt === "number" ? amt : 0;
     return `NGN ${num.toLocaleString()}`;
   };
 
-  const statCard = (x, y, w, label, value, accentColor, isCurrency = false) => {
+  const statCard = (x, y, w, label, value, accent, isCurrency = false) => {
     filledRect(x, y, w, 22, 3, SLATE_50);
-    doc.setDrawColor(...accentColor);
-    doc.setLineWidth(0.8);
+    doc.setDrawColor(accent.r, accent.g, accent.b).setLineWidth(0.8);
     doc.line(x + 0.4, y + 2, x + 0.4, y + 20);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...SLATE_600);
+    doc.setFontSize(7).setFont("helvetica", "normal");
+    setTextColorSafe(SLATE_600);
     doc.text(label, x + 4, y + 8);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...accentColor);
-    const displayValue = isCurrency ? formatCurrencyPDF(value) : String(value);
-    doc.text(displayValue, x + 4, y + 17);
+    doc.setFontSize(11).setFont("helvetica", "bold");
+    setTextColorSafe(accent);
+    doc.text(isCurrency ? formatCurrencyPDF(value) : String(value), x + 4, y + 17);
   };
 
   // Header
   filledRect(0, 0, pageW, 42, 0, BLUE_DARK);
-  doc.setFontSize(15);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...WHITE);
+  doc.setFontSize(15).setFont("helvetica", "bold");
+  setTextColorSafe(WHITE);
   doc.text("Primary Colours School", margin, 15);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(220, 235, 255);
+  doc.setFontSize(9).setFont("helvetica", "normal");
+  setTextColorSafe({ r: 220, g: 235, b: 255 });
   doc.text("Admin Dashboard Report", margin, 22);
   doc.setFontSize(7.5);
-  doc.setTextColor(220, 235, 255);
+  setTextColorSafe({ r: 220, g: 235, b: 255 });
   doc.text(`Generated: ${format(new Date(), "PPp")}`, pageW - margin, 15, { align: "right" });
   doc.text(`Period: All Time`, pageW - margin, 21, { align: "right" });
-  doc.setDrawColor(...BLUE_LIGHT);
-  doc.setLineWidth(0.3);
+  doc.setDrawColor(BLUE_LIGHT.r, BLUE_LIGHT.g, BLUE_LIGHT.b).setLineWidth(0.3);
   doc.line(0, 42, pageW, 42);
 
   let y = 50;
-
-  // Section 1: Financial Summary
-  y = sectionHeading("1.  Financial Summary", y);
   const stats = dashboardData.stats || {};
   const cardW = (contentW - 9) / 4;
-  statCard(margin, y, cardW, "Total Responses", stats.total || 0, BLUE);
-  statCard(margin + cardW + 3, y, cardW, "Accepted", stats.accepted || 0, GREEN);
-  statCard(margin + (cardW + 3) * 2, y, cardW, "Pending", stats.pending || 0, AMBER);
+
+  // Section 1: Financial Summary (5 cards)
+  y = sectionHeading("1.  Financial Summary", y);
+  statCard(margin, y, cardW, "Total", stats.total || 0, BLUE);
+  statCard(margin + cardW + 3, y, cardW, "Pending", stats.pending || 0, AMBER);
+  statCard(margin + (cardW + 3) * 2, y, cardW, "Partial", stats.partially_accepted || 0, ORANGE);
   statCard(margin + (cardW + 3) * 3, y, cardW, "Rejected", stats.rejected || 0, RED);
   y += 28;
 
-  // Section 2: Revenue Breakdown (Pie Chart Data)
+  // Revenue summary row
+  filledRect(margin, y, contentW, 10, 2, SLATE_50);
+  doc.setFontSize(7.5).setFont("helvetica", "normal");
+  setTextColorSafe(SLATE_600);
+  doc.text(`Recognized: ${formatCurrencyPDF(stats.totalRevenue || 0)}`, margin + 4, y + 6.5);
+  doc.text(`Pending: ${formatCurrencyPDF(stats.pendingRevenue || 0)}`, pageW / 2, y + 6.5, { align: "center" });
+  doc.text(`Total Potential: ${formatCurrencyPDF((stats.totalRevenue || 0) + (stats.pendingRevenue || 0))}`, pageW - margin - 4, y + 6.5, {
+    align: "right",
+  });
+  y += 16;
+
+  // Section 2: Revenue Breakdown
   if (dashboardData.revenueBreakdown?.length > 0) {
     y = sectionHeading("2.  Revenue Breakdown", y);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...SLATE_900);
+    doc.setFontSize(8).setFont("helvetica", "bold");
+    setTextColorSafe(SLATE_900);
     doc.text("Fee Categories", margin, y);
     y += 5;
 
@@ -215,35 +221,37 @@ const handleExportPDF = (dashboardData, filters) => {
       const cx = margin + col * colW;
       const cy = y + row * 8;
       filledRect(cx, cy, colW - 3, 7, 1.5, SLATE_50);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...SLATE_600);
+      doc.setFontSize(7).setFont("helvetica", "normal");
+      setTextColorSafe(SLATE_600);
       doc.text(`${item.name}`, cx + 3, cy + 4.5);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(...SLATE_900);
+      setTextColorSafe(SLATE_900);
+      // Use full currency format in PDF for clarity
       doc.text(`${formatCurrencyPDF(item.totalAmount)} • ${item.value}%`, cx + colW - 5, cy + 4.5, { align: "right" });
     });
     y += Math.ceil(modes.length / 2) * 8 + 8;
   }
 
-  // Section 3: Pipeline Status
+  // Section 3: Pipeline
   if (dashboardData.pipelineStatus?.length > 0) {
     y = sectionHeading("3.  Item Fulfillment Pipeline", y);
     dashboardData.pipelineStatus.forEach((stage) => {
       filledRect(margin, y, contentW, 7, 1.5, SLATE_50);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...SLATE_900);
+      doc.setFontSize(7).setFont("helvetica", "normal");
+      setTextColorSafe(SLATE_900);
       doc.text(`${stage.stage} (${stage.percentage}%)`, margin + 3, y + 4.8);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(stage.color === "#10b981" ? GREEN : stage.color === "#f59e0b" ? AMBER : RED);
+      // Set color based on stage
+      if (stage.color === "#10b981") setTextColorSafe(GREEN);
+      else if (stage.color === "#f59e0b") setTextColorSafe(AMBER);
+      else setTextColorSafe(RED);
       doc.text(`${stage.count.toLocaleString()} items`, pageW - margin - 3, y + 4.8, { align: "right" });
       y += 9;
     });
     y += 4;
   }
 
-  // Section 4: Recent Responses Table
+  // Section 4: Recent Responses
   if (dashboardData.recentResponses?.length > 0) {
     y = sectionHeading("4.  Recent Responses", y);
     autoTable(doc, {
@@ -261,8 +269,8 @@ const handleExportPDF = (dashboardData, filters) => {
         ]),
       theme: "striped",
       headStyles: {
-        fillColor: BLUE,
-        textColor: WHITE,
+        fillColor: [BLUE.r, BLUE.g, BLUE.b],
+        textColor: [WHITE.r, WHITE.g, WHITE.b],
         fontSize: 7.5,
         fontStyle: "bold",
         cellPadding: 3,
@@ -271,10 +279,10 @@ const handleExportPDF = (dashboardData, filters) => {
       bodyStyles: {
         fontSize: 7,
         cellPadding: 2.5,
-        textColor: SLATE_900,
+        textColor: [SLATE_900.r, SLATE_900.g, SLATE_900.b],
         lineWidth: 0,
       },
-      alternateRowStyles: { fillColor: SLATE_50 },
+      alternateRowStyles: { fillColor: [SLATE_50.r, SLATE_50.g, SLATE_50.b] },
       columnStyles: {
         0: { fontStyle: "bold", cellWidth: 35 },
         1: { cellWidth: 20 },
@@ -297,12 +305,10 @@ const handleExportPDF = (dashboardData, filters) => {
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setDrawColor(...SLATE_400);
-    doc.setLineWidth(0.2);
+    doc.setDrawColor(SLATE_400.r, SLATE_400.g, SLATE_400.b).setLineWidth(0.2);
     doc.line(margin, pageH - 12, pageW - margin, pageH - 12);
-    doc.setFontSize(6.5);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...SLATE_400);
+    doc.setFontSize(6.5).setFont("helvetica", "normal");
+    setTextColorSafe(SLATE_400);
     doc.text("Primary Colours School • Confidential", margin, pageH - 7);
     doc.text(`Page ${i} of ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
   }
@@ -322,8 +328,8 @@ function DashboardSkeleton() {
         </div>
         <div className="h-9 w-32 bg-slate-200 rounded" />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-        {[...Array(4)].map((_, i) => (
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
+        {[...Array(5)].map((_, i) => (
           <div key={i} className="h-28 bg-slate-200 rounded-xl" />
         ))}
       </div>
@@ -352,22 +358,27 @@ function EmptyState({ message }) {
 // ─── Main Dashboard Component ──────────────────────────────────────────────
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
-  const [useMockData, setUseMockData] = useState(false); // Default to live mode
+  const [useMockData, setUseMockData] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
   const [recentResponses, setRecentResponses] = useState([]);
   const [error, setError] = useState(null);
 
-  // Load dashboard data
   const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
       if (useMockData) {
-        // Mock data for testing only
         await new Promise((r) => setTimeout(r, 800));
         setDashboardData({
-          stats: { total: 1284, pending: 38, accepted: 1196, rejected: 50, totalRevenue: 12400000 },
+          stats: {
+            total: 1284,
+            pending: 38,
+            partially_accepted: 45,
+            accepted: 1196,
+            rejected: 50,
+            totalRevenue: 12400000,
+            pendingRevenue: 2400000,
+          },
           monthlySubmissions: [
             { month: "Apr", count: 142 },
             { month: "May", count: 188 },
@@ -389,23 +400,8 @@ export default function Dashboard() {
             { name: "Others", value: 6, totalAmount: 744000, count: 20, color: "#6366f1" },
           ],
           pipelineStatus: [
-            {
-              stage: "Pending Verification",
-              count: 38,
-              description: "Awaiting admin review",
-              percentage: 3,
-              color: "#f59e0b",
-              icon: Clock,
-            },
-            { stage: "Items Assigned", count: 156, description: "Staff yet to hand over", percentage: 12, color: "#136dec", icon: Package },
-            {
-              stage: "Fully Completed",
-              count: 1090,
-              description: "All items handed over",
-              percentage: 85,
-              color: "#10b981",
-              icon: CheckCircle2,
-            },
+            { stage: "Awaiting Handover", count: 156, description: "Staff yet to distribute", percentage: 12, color: "#f59e0b" },
+            { stage: "Fully Collected", count: 1090, description: "Student received item", percentage: 88, color: "#10b981" },
           ],
         });
         setRecentResponses([
@@ -415,7 +411,7 @@ export default function Dashboard() {
             classId: { name: "JSS 1" },
             nameOfPayerOrCompany: "Mr. Emeka Okafor",
             totalAmount: 145000,
-            status: "accepted",
+            status: "partially_accepted",
             createdAt: "2023-10-24T10:00:00.000Z",
           },
           {
@@ -448,7 +444,6 @@ export default function Dashboard() {
         ]);
         toast.success("Mock data loaded");
       } else {
-        // Real API calls
         const [dashboard, recent] = await Promise.all([getDashboardData(), getRecentResponses(1, 10)]);
         setDashboardData(dashboard.data);
         setRecentResponses(recent.data?.recentResponses || []);
@@ -467,49 +462,53 @@ export default function Dashboard() {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  // Prepare chart data from API response
-  const monthlySubmissions = useMemo(() => {
-    if (useMockData) return dashboardData?.monthlySubmissions || [];
-    return (
-      dashboardData?.monthlySubmissions?.map((item) => ({
-        month: item.month,
-        count: item.count,
-      })) || []
-    );
-  }, [dashboardData, useMockData]);
-
-  const revenueBreakdown = useMemo(() => {
-    if (useMockData) return dashboardData?.revenueBreakdown || [];
-    return (
-      dashboardData?.revenueBreakdown?.map((item) => ({
-        name: item.name,
-        value: item.value, // Percentage for pie chart
-        totalAmount: item.totalAmount, // Actual amount for display
-        count: item.count, // Number of payments
-        color: item.color || "#64748b",
-      })) || []
-    );
-  }, [dashboardData, useMockData]);
-
-  const pipelineStatus = useMemo(() => {
-    if (useMockData) return dashboardData?.pipelineStatus || [];
-    return (
-      dashboardData?.pipelineStatus?.map((item) => ({
-        stage: item.stage,
-        count: item.count,
-        description: item.description,
-        percentage: item.percentage,
-        color: item.color,
-        icon: item.icon || Clock,
-      })) || []
-    );
-  }, [dashboardData, useMockData]);
-
-  const stats = dashboardData?.stats || { total: 0, pending: 0, accepted: 0, rejected: 0, totalRevenue: 0 };
+  const monthlySubmissions = useMemo(
+    () =>
+      useMockData
+        ? dashboardData?.monthlySubmissions || []
+        : dashboardData?.monthlySubmissions?.map((item) => ({ month: item.month, count: item.count })) || [],
+    [dashboardData, useMockData],
+  );
+  const revenueBreakdown = useMemo(
+    () =>
+      useMockData
+        ? dashboardData?.revenueBreakdown || []
+        : dashboardData?.revenueBreakdown?.map((item) => ({
+            name: item.name,
+            value: item.value,
+            totalAmount: item.totalAmount,
+            count: item.count,
+            color: item.color || "#64748b",
+          })) || [],
+    [dashboardData, useMockData],
+  );
+  const pipelineStatus = useMemo(
+    () =>
+      useMockData
+        ? dashboardData?.pipelineStatus || []
+        : dashboardData?.pipelineStatus?.map((item) => ({
+            stage: item.stage,
+            count: item.count,
+            description: item.description,
+            percentage: item.percentage,
+            color: item.color,
+            icon: item.icon || Clock,
+          })) || [],
+    [dashboardData, useMockData],
+  );
+  const stats = dashboardData?.stats || {
+    total: 0,
+    pending: 0,
+    partially_accepted: 0,
+    accepted: 0,
+    rejected: 0,
+    totalRevenue: 0,
+    pendingRevenue: 0,
+  };
 
   const statCards = [
     {
-      label: "Total Responses",
+      label: "Total",
       value: stats.total.toLocaleString(),
       badge: "+12.5%",
       badgeColor: "text-emerald-600 bg-emerald-50",
@@ -518,18 +517,27 @@ export default function Dashboard() {
       icon: BarChart2,
     },
     {
-      label: "Pending Review",
+      label: "Pending",
       value: stats.pending.toLocaleString(),
-      badge: "Action Req.",
+      badge: "Review",
       badgeColor: "text-amber-600 bg-amber-50",
       iconBg: "bg-amber-50",
       iconColor: "text-amber-500",
       icon: Clock,
     },
     {
+      label: "Partial",
+      value: stats.partially_accepted.toLocaleString(),
+      badge: "Follow-up",
+      badgeColor: "text-orange-600 bg-orange-50",
+      iconBg: "bg-orange-50",
+      iconColor: "text-orange-500",
+      icon: TrendingUp,
+    },
+    {
       label: "Accepted",
       value: stats.accepted.toLocaleString(),
-      badge: stats.total > 0 ? `${Math.round((stats.accepted / stats.total) * 100)}% Rate` : "0% Rate",
+      badge: stats.total > 0 ? `${Math.round((stats.accepted / stats.total) * 100)}%` : "0%",
       badgeColor: "text-emerald-600 bg-emerald-50",
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
@@ -549,7 +557,6 @@ export default function Dashboard() {
   const displayResponses = recentResponses.length > 0 ? recentResponses : useMockData ? [] : [];
 
   if (loading) return <DashboardSkeleton />;
-
   if (error) {
     return (
       <div className="p-4 sm:p-6 lg:p-8">
@@ -579,9 +586,8 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Export PDF Button - Now Working */}
           <button
-            onClick={() => handleExportPDF(dashboardData, {})}
+            onClick={() => handleExportPDF(dashboardData)}
             disabled={!dashboardData}
             className="h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-bold text-white bg-[#136dec] rounded-lg hover:opacity-90 transition-all flex items-center gap-1.5 shadow-sm shadow-[#136dec]/30 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
@@ -592,8 +598,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Stat cards ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+      {/* ── Stat cards (5 cards for Option A) ───────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
         {statCards.map((card) => (
           <div
             key={card.label}
@@ -647,7 +653,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Donut chart */}
+        {/* Donut chart with compact currency */}
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
           <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">Revenue Breakdown</h4>
           <p className="text-[11px] sm:text-xs text-slate-500 mb-3 sm:mb-4">Distribution by Fee Type</p>
@@ -696,7 +702,7 @@ export default function Dashboard() {
                     Total Revenue
                   </p>
                   <p className="text-base sm:text-lg lg:text-xl font-black text-slate-900 leading-none">
-                    {formatCurrency(stats.totalRevenue || 0)}
+                    {formatCompactCurrency(stats.totalRevenue || 0)}
                   </p>
                 </div>
               </>
@@ -713,7 +719,9 @@ export default function Dashboard() {
                     <span className="text-[11px] sm:text-xs">{item.name}</span>
                   </div>
                   <div className="text-right">
-                    <span className="font-bold text-slate-900 text-[11px] sm:text-xs block">{formatCurrency(item.totalAmount || 0)}</span>
+                    <span className="font-bold text-slate-900 text-[11px] sm:text-xs block">
+                      {formatCompactCurrency(item.totalAmount || 0)}
+                    </span>
                     <span className="text-[9px] text-slate-400">{item.value}%</span>
                   </div>
                 </div>
@@ -725,7 +733,7 @@ export default function Dashboard() {
 
       {/* ── Charts row 2 ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-        {/* Payment-to-Handover Pipeline */}
+        {/* Pipeline */}
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
           <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">Item Fulfillment Pipeline</h4>
           <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">Track items through verification to collection</p>
@@ -738,7 +746,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent responses */}
+        {/* Recent responses with compact amounts */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 overflow-hidden">
           <div className="px-4 sm:px-5 lg:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between">
             <h4 className="font-bold text-slate-900 text-sm sm:text-base">Recent Responses</h4>
@@ -749,7 +757,6 @@ export default function Dashboard() {
               View All <ArrowRight size={11} />
             </Link>
           </div>
-          {/* Card list — phones only */}
           <div className="md:hidden divide-y divide-slate-100">
             {displayResponses.length > 0 ? (
               displayResponses.map((row) => (
@@ -761,7 +768,7 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className="text-sm font-bold text-slate-900">₦{row.totalAmount?.toLocaleString()}</span>
+                    <span className="text-sm font-bold text-slate-900">{formatCompactCurrency(row.totalAmount)}</span>
                     <StatusBadge status={row.status} />
                   </div>
                 </div>
@@ -770,7 +777,6 @@ export default function Dashboard() {
               <div className="px-4 py-8 text-center text-sm text-slate-400">No recent responses</div>
             )}
           </div>
-          {/* Table — md and above */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
@@ -778,7 +784,7 @@ export default function Dashboard() {
                   <th className="px-5 py-3.5">Child Name</th>
                   <th className="px-5 py-3.5">Class</th>
                   <th className="px-5 py-3.5">Payer</th>
-                  <th className="px-5 py-3.5">Amount (₦)</th>
+                  <th className="px-5 py-3.5">Amount</th>
                   <th className="px-5 py-3.5">Status</th>
                   <th className="px-5 py-3.5 hidden lg:table-cell">Date</th>
                 </tr>
@@ -797,7 +803,7 @@ export default function Dashboard() {
                         <span className="text-xs text-slate-400 whitespace-nowrap">{row.nameOfPayerOrCompany}</span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className="text-sm font-bold text-slate-900 whitespace-nowrap">{row.totalAmount?.toLocaleString()}</span>
+                        <span className="text-sm font-bold text-slate-900 whitespace-nowrap">{formatCompactCurrency(row.totalAmount)}</span>
                       </td>
                       <td className="px-5 py-3.5">
                         <StatusBadge status={row.status} />
