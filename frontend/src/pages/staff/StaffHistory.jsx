@@ -210,12 +210,13 @@ function Pagination({ page, pages, total, limit, onPage }) {
 
 /* ─── Note Badge ─────────────────────────────────────────────────────────── */
 function NoteBadge({ note }) {
-  if (!note || note === "Marked as collected") return null;
+  // Show dash for empty or default system notes
+  if (!note || note === "Marked as collected") return <span className="text-slate-300">—</span>;
+
   return (
     <span
-      className="inline-block max-w-[180px] truncate rounded-md px-2 py-0.5 text-xs italic text-slate-500"
-      style={{ background: "#f8fafc" }}
-      title={note}
+      className="block max-w-[150px] truncate text-xs italic text-slate-500 cursor-help"
+      title={note} // Native browser tooltip shows full text on hover
     >
       "{note}"
     </span>
@@ -617,7 +618,7 @@ export default function StaffHistory() {
                       <th className="px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">Qty</th>
                       <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Handed Over By</th>
                       <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Date & Time</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Note</th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 w-[180px]">Note</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -662,7 +663,9 @@ export default function StaffHistory() {
                           </div>
                         </td>
                         <td className="px-5 py-3.5">
-                          <NoteBadge note={tx.note} />
+                          <div className="max-w-[150px] truncate">
+                            <NoteBadge note={tx.note} />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -727,7 +730,9 @@ export default function StaffHistory() {
                         </span>
                       </div>
                       {tx.note && tx.note !== "Marked as collected" && (
-                        <p className="text-xs italic text-slate-400 truncate">"{tx.note}"</p>
+                        <p className="text-xs italic text-slate-400 truncate max-w-full cursor-help" title={tx.note}>
+                          "{tx.note}"
+                        </p>
                       )}
                     </div>
                   </div>
