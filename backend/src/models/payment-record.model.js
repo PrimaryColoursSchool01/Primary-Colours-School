@@ -35,7 +35,6 @@ const paymentRecordSchema = new mongoose.Schema(
       },
     ],
     totalAmount: { type: Number, required: true, min: 0 },
-    // Parent status: auto-calculated from items[].status
     status: {
       type: String,
       required: true,
@@ -51,9 +50,12 @@ const paymentRecordSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Auto-calculate parent status based on item statuses
-paymentRecordSchema.pre("save", function (next) {
-  if (!this.isModified("items")) return next();
+// ── AUTO-CALCULATE PARENT STATUS ───────────────────────────────
+// Using async function — Mongoose 7+ awaits the returned promise automatically,
+// so no next() callback is needed. The callback style breaks with Model.create()
+// in Mongoose 9.x, causing "next is not a function".
+paymentRecordSchema.pre("save", async function () {
+  if (!this.isModified("items")) return;
 
   const statuses = this.items.map((i) => i.status || "pending");
   const allAccepted = statuses.every((s) => s === "accepted");
@@ -72,10 +74,9 @@ paymentRecordSchema.pre("save", function (next) {
   } else {
     this.status = "pending";
   }
-
-  next();
 });
 
+// Indexes
 paymentRecordSchema.index({ dateOfPayment: 1, status: 1, classId: 1 });
 paymentRecordSchema.index({ "items.status": 1, "items.itemId": 1 });
 paymentRecordSchema.index({ modeOfPayment: 1, dateOfPayment: 1 });

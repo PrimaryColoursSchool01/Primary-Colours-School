@@ -206,15 +206,28 @@ export const updatePaymentRecordById = async (req, res, next) => {
       return next(err);
     }
 
-    // ── REJECT ALL ──────────────────────────────────────────────────
+    // ── REJECT ALL PENDING ITEMS ─────────────────────────────────────
     if (action === "reject") {
+      let hasPendingItems = false;
+
       paymentRecord.items.forEach((item) => {
-        if (item.status === "pending") item.status = "rejected";
+        if (item.status === "pending") {
+          item.status = "rejected";
+          hasPendingItems = true;
+        }
       });
+
+      if (!hasPendingItems) {
+        const err = new Error("No pending items to reject");
+        err.statusCode = 400;
+        return next(err);
+      }
+
       paymentRecord.rejectionReason = rejectionReason;
       paymentRecord.rejectedAt = new Date();
       paymentRecord.rejectedBy = req.user.id;
-      // Middleware will auto-set status = "rejected" since all items are now rejected
+      // Middleware will auto-calculate parent status based on final item states
+
       await paymentRecord.save();
 
       const populatedRecord = await PaymentRecord.findById(paymentRecord._id)

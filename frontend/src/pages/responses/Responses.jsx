@@ -115,6 +115,7 @@ export default function Responses() {
       pending: "bg-yellow-100 text-yellow-800 border border-yellow-200",
       accepted: "bg-green-100 text-green-800 border border-green-200",
       rejected: "bg-red-100 text-red-800 border border-red-200",
+      partially_accepted: "bg-orange-100 text-orange-800 border border-orange-200", // ← NEW
     };
     return configs[status] || configs.pending;
   };
@@ -162,6 +163,7 @@ export default function Responses() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="partially_accepted">Partial</SelectItem> {/* ← NEW */}
                 <SelectItem value="accepted">Accepted</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
@@ -203,7 +205,7 @@ export default function Responses() {
                     <p className="text-[10px] sm:text-xs text-slate-500 truncate mt-0.5">{record.nameOfPayerOrCompany}</p>
                   </div>
                   <Badge className={`${getStatusBadge(record.status)} shrink-0 text-[10px] sm:text-xs px-2 py-0.5 h-auto`}>
-                    {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                    {record.status === "partially_accepted" ? "Partial" : record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-3">
@@ -280,7 +282,9 @@ export default function Responses() {
                     <TableCell className="text-sm">{record.session}</TableCell>
                     <TableCell>
                       <Badge className={getStatusBadge(record.status)}>
-                        {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                        {record.status === "partially_accepted"
+                          ? "Partial"
+                          : record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">{new Date(record.createdAt).toLocaleDateString()}</TableCell>
@@ -429,7 +433,9 @@ export default function Responses() {
                 <div className="p-2.5 sm:p-3 md:p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2">
                   <p className="text-[10px] sm:text-xs text-slate-500">Overall Status</p>
                   <Badge className={`${getStatusBadge(selectedRecord.status)} text-xs px-2 py-0.5 h-auto`}>
-                    {selectedRecord.status.charAt(0).toUpperCase() + selectedRecord.status.slice(1)}
+                    {selectedRecord.status === "partially_accepted"
+                      ? "Partial"
+                      : selectedRecord.status.charAt(0).toUpperCase() + selectedRecord.status.slice(1)}
                   </Badge>
                   {selectedRecord.status === "accepted" && selectedRecord.acceptedBy && (
                     <p className="text-[10px] sm:text-xs text-slate-500 mt-2 break-words">
@@ -466,9 +472,10 @@ export default function Responses() {
                   variant="outline"
                   onClick={openRejectModal}
                   className="w-full sm:w-auto order-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs sm:text-sm h-9"
+                  title="Reject all pending items in this payment. Already accepted items will remain approved."
                 >
                   <XCircle size={14} className="mr-1.5 shrink-0" />
-                  <span className="truncate">Reject Remaining</span>
+                  <span className="truncate">Reject Pending</span>
                 </Button>
                 <Button
                   onClick={handleAccept}
@@ -494,15 +501,16 @@ export default function Responses() {
       <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
         <DialogContent className="w-[95vw] sm:w-[85vw] max-w-md max-h-[90dvh] overflow-x-hidden overflow-y-auto p-3 sm:p-5 md:p-6">
           <DialogHeader className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b">
-            <DialogTitle className="text-sm sm:text-base font-semibold">Reject Payment Record</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">Provide a reason for rejecting this payment submission</DialogDescription>
+            <DialogTitle className="text-sm sm:text-base font-semibold">Reject Pending Items</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">Provide a reason for rejecting the remaining pending items</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 sm:space-y-4 mt-2">
             <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
               <AlertCircle className="text-yellow-600 mt-0.5 shrink-0" size={16} />
               <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400">
-                This will reject ALL pending items in this payment record. This action cannot be undone.
+                This will reject ALL pending items in this payment record. Already accepted items will remain approved. This action cannot
+                be undone.
               </p>
             </div>
             <div className="space-y-2">
@@ -525,7 +533,7 @@ export default function Responses() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleReject} className="w-full sm:w-auto order-1 sm:order-2 text-xs sm:text-sm h-9">
-              Reject Payment
+              Reject Pending Items
             </Button>
           </DialogFooter>
         </DialogContent>
