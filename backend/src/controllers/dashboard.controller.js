@@ -1,5 +1,7 @@
+// src/controllers/admin/dashboard.controller.js
 import PaymentRecord from "../models/payment-record.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
+import Item from "../models/items-fess.model.js";
 
 // ─── Main Dashboard Data ─────────────────────────────────────────────────────
 
@@ -22,6 +24,7 @@ export const getDashboardData = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error("Dashboard data fetch error:", error);
     next(error);
   }
 };
@@ -53,6 +56,7 @@ export const getRecentResponses = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error("Recent responses fetch error:", error);
     next(error);
   }
 };
@@ -60,154 +64,163 @@ export const getRecentResponses = async (req, res, next) => {
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
 async function getStats() {
-  const [total, pending, accepted, rejected] = await Promise.all([
-    PaymentRecord.countDocuments(),
-    PaymentRecord.countDocuments({ status: "pending" }),
-    PaymentRecord.countDocuments({ status: "accepted" }),
-    PaymentRecord.countDocuments({ status: "rejected" }),
-  ]);
+  try {
+    const [total, pending, accepted, rejected, revenueResult] = await Promise.all([
+      PaymentRecord.countDocuments(),
+      PaymentRecord.countDocuments({ status: "pending" }),
+      PaymentRecord.countDocuments({ status: "accepted" }),
+      PaymentRecord.countDocuments({ status: "rejected" }),
+      // Calculate total revenue from accepted payments
+      PaymentRecord.aggregate([
+        { $match: { status: "accepted" } },
+        { $unwind: "$items" },
+        { $group: { _id: null, totalRevenue: { $sum: "$items.amountAtPayment" } } },
+      ]),
+    ]);
 
-  return { total, pending, accepted, rejected };
+    const totalRevenue = revenueResult[0]?.totalRevenue || 0;
+
+    return {
+      total,
+      pending,
+      accepted,
+      rejected,
+      totalRevenue, // Add total revenue for dashboard display
+    };
+  } catch (error) {
+    console.error("Stats fetch error:", error);
+    throw error;
+  }
 }
 
 async function getMonthlySubmissions() {
-  // Get last 12 months from today
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+  try {
+    // Get last 12 months from today
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
-  const data = await PaymentRecord.aggregate([
-    { $match: { createdAt: { $gte: twelveMonthsAgo } } },
-    {
-      $group: {
-        _id: {
-          year: { $year: "$createdAt" },
-          month: { $month: "$createdAt" },
+    const data = await PaymentRecord.aggregate([
+      { $match: { createdAt: { $gte: twelveMonthsAgo } } },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+          },
+          count: { $sum: 1 },
         },
-        count: { $sum: 1 },
       },
-    },
-    { $sort: { "_id.year": 1, "_id.month": 1 } },
-  ]);
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
+    ]);
 
-  // Month names for formatting
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+    // Month names for formatting
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  return data.map((item) => ({
-    month: `${monthNames[item._id.month - 1]} ${String(item._id.year).slice(-2)}`,
-    count: item.count,
-  }));
+    return data.map((item) => ({
+      month: `${monthNames[item._id.month - 1]} ${String(item._id.year).slice(-2)}`,
+      count: item.count,
+    }));
+  } catch (error) {
+    console.error("Monthly submissions fetch error:", error);
+    throw error;
+  }
 }
 
 async function getRevenueBreakdown() {
-  const data = await PaymentRecord.aggregate([
-    { $match: { status: "accepted" } },
-    { $unwind: "$items" },
-    {
-      $group: {
-        _id: "$items.itemId",
-        total: { $sum: "$items.amountAtPayment" },
+  try {
+    const data = await PaymentRecord.aggregate([
+      { $match: { status: "accepted" } },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$items.itemId",
+          totalAmount: { $sum: "$items.amountAtPayment" },
+          count: { $sum: 1 },
+        },
       },
-    },
-    {
-      $lookup: {
-        from: "items",
-        localField: "_id",
-        foreignField: "_id",
-        as: "item",
+      {
+        $lookup: {
+          from: "items", // Make sure this matches your Item collection name
+          localField: "_id",
+          foreignField: "_id",
+          as: "item",
+        },
       },
-    },
-    { $unwind: "$item" },
-    {
-      $group: {
-        _id: "$item.name",
-        value: { $sum: "$total" },
+      { $unwind: "$item" },
+      {
+        $group: {
+          _id: "$item.name",
+          totalAmount: { $sum: "$totalAmount" },
+          count: { $sum: "$count" },
+        },
       },
-    },
-  ]);
+      { $sort: { totalAmount: -1 } }, // Sort by highest revenue first
+      { $limit: 5 }, // Top 5 items for clean chart display
+    ]);
 
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  const colors = ["#136dec", "#fbbf24", "#10b981", "#6366f1", "#f43f5e"];
+    const grandTotal = data.reduce((sum, item) => sum + item.totalAmount, 0);
+    const colors = ["#136dec", "#fbbf24", "#10b981", "#6366f1", "#f43f5e"];
 
-  return data.map((item, index) => ({
-    name: item._id,
-    value: Math.round((item.value / total) * 100) || 0,
-    color: colors[index % colors.length],
-  }));
+    return data.map((item, index) => ({
+      name: item._id,
+      value: Math.round((item.totalAmount / grandTotal) * 100) || 0, // Percentage for pie chart
+      totalAmount: item.totalAmount, // Actual amount for display
+      count: item.count, // Number of payments for this item
+      color: colors[index % colors.length],
+    }));
+  } catch (error) {
+    console.error("Revenue breakdown fetch error:", error);
+    throw error;
+  }
 }
 
 async function getPipelineStatus() {
-  const pending = await PaymentRecord.countDocuments({ status: "pending" });
+  try {
+    // Count payments awaiting verification
+    const pendingPayments = await PaymentRecord.countDocuments({ status: "pending" });
 
-  const acceptedPayments = await PaymentRecord.find({ status: "accepted" }).distinct("_id");
-  const assigned = await ItemTransaction.countDocuments({
-    paymentRecordId: { $in: acceptedPayments },
-    status: "pending",
-  });
+    // Get all accepted payment IDs
+    const acceptedPaymentIds = await PaymentRecord.find({ status: "accepted" }).distinct("_id");
 
-  const completed = await PaymentRecord.aggregate([
-    { $match: { status: "accepted" } },
-    {
-      $lookup: {
-        from: "itemtransactions",
-        localField: "_id",
-        foreignField: "paymentRecordId",
-        as: "transactions",
+    // Count ITEMS (not payments) in each fulfillment stage
+    const pendingItems = await ItemTransaction.countDocuments({
+      paymentRecordId: { $in: acceptedPaymentIds },
+      status: "pending",
+    });
+
+    const collectedItems = await ItemTransaction.countDocuments({
+      paymentRecordId: { $in: acceptedPaymentIds },
+      status: "collected",
+    });
+
+    // Total items across all stages for percentage calculation
+    const totalItems = pendingPayments + pendingItems + collectedItems;
+
+    return [
+      {
+        stage: "Pending Verification",
+        count: pendingPayments,
+        description: "Awaiting admin review",
+        percentage: Math.round((pendingPayments / totalItems) * 100) || 0,
+        color: "#f59e0b",
       },
-    },
-    {
-      $addFields: {
-        allCollected: {
-          $allElementsTrue: {
-            $map: {
-              input: "$transactions",
-              as: "t",
-              in: { $eq: ["$$t.status", "collected"] },
-            },
-          },
-        },
+      {
+        stage: "Items Assigned",
+        count: pendingItems,
+        description: "Staff yet to hand over",
+        percentage: Math.round((pendingItems / totalItems) * 100) || 0,
+        color: "#136dec",
       },
-    },
-    { $match: { allCollected: true } },
-    { $count: "total" },
-  ]);
-
-  const completedCount = completed[0]?.total || 0;
-  const total = pending + assigned + completedCount;
-
-  return [
-    {
-      stage: "Pending Verification",
-      count: pending,
-      description: "Awaiting admin review",
-      percentage: Math.round((pending / total) * 100) || 0,
-      color: "#f59e0b",
-    },
-    {
-      stage: "Items Assigned",
-      count: assigned,
-      description: "Staff yet to hand over",
-      percentage: Math.round((assigned / total) * 100) || 0,
-      color: "#136dec",
-    },
-    {
-      stage: "Fully Completed",
-      count: completedCount,
-      description: "All items handed over",
-      percentage: Math.round((completedCount / total) * 100) || 0,
-      color: "#10b981",
-    },
-  ];
+      {
+        stage: "Fully Completed",
+        count: collectedItems,
+        description: "All items handed over",
+        percentage: Math.round((collectedItems / totalItems) * 100) || 0,
+        color: "#10b981",
+      },
+    ];
+  } catch (error) {
+    console.error("Pipeline status fetch error:", error);
+    throw error;
+  }
 }
