@@ -103,7 +103,7 @@ function PipelineStage({ stage }) {
       <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-bold">
         <div className="flex items-center gap-1 sm:gap-1.5" style={{ color: stage.color }}>
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-          {stage.count.toLocaleString()} submissions
+          {stage.count.toLocaleString()} items
         </div>
         <span className="text-slate-400 font-medium">{stage.description}</span>
       </div>
@@ -204,12 +204,12 @@ const handleExportPDF = (dashboardData, filters) => {
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...SLATE_900);
-    doc.text("Payment Methods", margin, y);
+    doc.text("Fee Categories", margin, y);
     y += 5;
 
     const modes = dashboardData.revenueBreakdown.filter((m) => m.value > 0);
     const colW = contentW / 2;
-    modes.forEach(([mode, info], idx) => {
+    modes.forEach((item, idx) => {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
       const cx = margin + col * colW;
@@ -218,17 +218,17 @@ const handleExportPDF = (dashboardData, filters) => {
       doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...SLATE_600);
-      doc.text(`${PAYMENT_MODE_LABELS[mode] || mode}`, cx + 3, cy + 4.5);
+      doc.text(`${item.name}`, cx + 3, cy + 4.5);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...SLATE_900);
-      doc.text(`${info.count || 0} • ${info.value}%`, cx + colW - 5, cy + 4.5, { align: "right" });
+      doc.text(`${formatCurrencyPDF(item.totalAmount)} • ${item.value}%`, cx + colW - 5, cy + 4.5, { align: "right" });
     });
     y += Math.ceil(modes.length / 2) * 8 + 8;
   }
 
   // Section 3: Pipeline Status
   if (dashboardData.pipelineStatus?.length > 0) {
-    y = sectionHeading("3.  Payment-to-Handover Pipeline", y);
+    y = sectionHeading("3.  Item Fulfillment Pipeline", y);
     dashboardData.pipelineStatus.forEach((stage) => {
       filledRect(margin, y, contentW, 7, 1.5, SLATE_50);
       doc.setFontSize(7);
@@ -237,7 +237,7 @@ const handleExportPDF = (dashboardData, filters) => {
       doc.text(`${stage.stage} (${stage.percentage}%)`, margin + 3, y + 4.8);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(stage.color === "#10b981" ? GREEN : stage.color === "#f59e0b" ? AMBER : RED);
-      doc.text(`${stage.count.toLocaleString()} submissions`, pageW - margin - 3, y + 4.8, { align: "right" });
+      doc.text(`${stage.count.toLocaleString()} items`, pageW - margin - 3, y + 4.8, { align: "right" });
       y += 9;
     });
     y += 4;
@@ -367,7 +367,7 @@ export default function Dashboard() {
         // Mock data for testing only
         await new Promise((r) => setTimeout(r, 800));
         setDashboardData({
-          stats: { total: 1284, pending: 38, accepted: 1196, rejected: 50 },
+          stats: { total: 1284, pending: 38, accepted: 1196, rejected: 50, totalRevenue: 12400000 },
           monthlySubmissions: [
             { month: "Apr", count: 142 },
             { month: "May", count: 188 },
@@ -383,10 +383,10 @@ export default function Dashboard() {
             { month: "Mar", count: 5 },
           ],
           revenueBreakdown: [
-            { name: "Tuition Fees", value: 70, color: "#136dec" },
-            { name: "Exam Fees", value: 16, color: "#fbbf24" },
-            { name: "Sports/Clubs", value: 8, color: "#10b981" },
-            { name: "Others", value: 6, color: "#6366f1" },
+            { name: "Tuition Fees", value: 70, totalAmount: 8680000, count: 290, color: "#136dec" },
+            { name: "Exam Fees", value: 16, totalAmount: 1984000, count: 90, color: "#fbbf24" },
+            { name: "Sports/Clubs", value: 8, totalAmount: 992000, count: 50, color: "#10b981" },
+            { name: "Others", value: 6, totalAmount: 744000, count: 20, color: "#6366f1" },
           ],
           pipelineStatus: [
             {
@@ -470,7 +470,6 @@ export default function Dashboard() {
   // Prepare chart data from API response
   const monthlySubmissions = useMemo(() => {
     if (useMockData) return dashboardData?.monthlySubmissions || [];
-    // Transform API response to chart format if needed
     return (
       dashboardData?.monthlySubmissions?.map((item) => ({
         month: item.month,
@@ -481,19 +480,19 @@ export default function Dashboard() {
 
   const revenueBreakdown = useMemo(() => {
     if (useMockData) return dashboardData?.revenueBreakdown || [];
-    // Transform API response if needed
     return (
       dashboardData?.revenueBreakdown?.map((item) => ({
         name: item.name,
-        value: item.value,
-        color: PAYMENT_MODE_COLORS[item.mode] || "#64748b",
+        value: item.value, // Percentage for pie chart
+        totalAmount: item.totalAmount, // Actual amount for display
+        count: item.count, // Number of payments
+        color: item.color || "#64748b",
       })) || []
     );
   }, [dashboardData, useMockData]);
 
   const pipelineStatus = useMemo(() => {
     if (useMockData) return dashboardData?.pipelineStatus || [];
-    // Transform API response if needed
     return (
       dashboardData?.pipelineStatus?.map((item) => ({
         stage: item.stage,
@@ -506,7 +505,7 @@ export default function Dashboard() {
     );
   }, [dashboardData, useMockData]);
 
-  const stats = dashboardData?.stats || { total: 0, pending: 0, accepted: 0, rejected: 0 };
+  const stats = dashboardData?.stats || { total: 0, pending: 0, accepted: 0, rejected: 0, totalRevenue: 0 };
 
   const statCards = [
     {
@@ -693,8 +692,12 @@ export default function Dashboard() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">Total</p>
-                  <p className="text-base sm:text-lg lg:text-xl font-black text-slate-900 leading-none">{formatCurrency(stats.total)}</p>
+                  <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                    Total Revenue
+                  </p>
+                  <p className="text-base sm:text-lg lg:text-xl font-black text-slate-900 leading-none">
+                    {formatCurrency(stats.totalRevenue || 0)}
+                  </p>
                 </div>
               </>
             ) : (
@@ -709,7 +712,10 @@ export default function Dashboard() {
                     <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                     <span className="text-[11px] sm:text-xs">{item.name}</span>
                   </div>
-                  <span className="font-bold text-slate-900 text-[11px] sm:text-xs">{item.value}%</span>
+                  <div className="text-right">
+                    <span className="font-bold text-slate-900 text-[11px] sm:text-xs block">{formatCurrency(item.totalAmount || 0)}</span>
+                    <span className="text-[9px] text-slate-400">{item.value}%</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -721,8 +727,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Payment-to-Handover Pipeline */}
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
-          <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">Payment-to-Handover Pipeline</h4>
-          <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">Track submissions through verification to completion</p>
+          <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">Item Fulfillment Pipeline</h4>
+          <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">Track items through verification to collection</p>
           <div className="space-y-6 sm:space-y-7 lg:space-y-8">
             {pipelineStatus.length > 0 ? (
               pipelineStatus.map((stage) => <PipelineStage key={stage.stage} stage={stage} />)
