@@ -1,13 +1,16 @@
 // controllers/report.controller.js
 import mongoose from "mongoose";
 import PaymentRecord from "../models/payment-record.model.js";
+import ItemTransaction from "../models/item-transaction.model.js";
 import Item from "../models/items-fess.model.js";
 
 export const getPaymentSummary = async (req, res, next) => {
   const { startDate, endDate, classId, status } = req.query;
 
   try {
+    // ── BUILD BASE FILTER ─────────────────────────────────────────────
     const matchStage = {};
+
     if (startDate || endDate) {
       matchStage.dateOfPayment = {};
       if (startDate) matchStage.dateOfPayment.$gte = new Date(startDate);
@@ -18,106 +21,221 @@ export const getPaymentSummary = async (req, res, next) => {
       }
     }
     if (classId) matchStage.classId = new mongoose.Types.ObjectId(classId);
-    if (status && status !== "all") matchStage.status = status;
 
-    // 1. Count PAYMENT RECORDS (No item unwind = accurate counts)
+    if (status && status !== "all") {
+      matchStage.status = status;
+    }
+
+    // ── 1. PAYMENT SUMMARY (Parent-level counts + item-based revenue) ─
     const summaryResult = await PaymentRecord.aggregate([
       { $match: matchStage },
+      { $unwind: "$items" },
       {
         $group: {
           _id: null,
-          totalAmount: { $sum: "$totalAmount" },
+          totalRevenue: {
+            $sum: {
+              $cond: [{ $eq: ["$items.status", "accepted"] }, "$items.amountAtPayment", 0],
+            },
+          },
+          pendingRevenue: {
+            $sum: {
+              $cond: [{ $and: [{ $eq: ["$items.status", "pending"] }, { $ne: ["$status", "rejected"] }] }, "$items.amountAtPayment", 0],
+            },
+          },
           acceptedCount: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
+          partiallyAcceptedCount: { $sum: { $cond: [{ $eq: ["$status", "partially_accepted"] }, 1, 0] } },
           pendingCount: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
           rejectedCount: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-          acceptedAmount: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, "$totalAmount", 0] } },
-          pendingAmount: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, "$totalAmount", 0] } },
-          rejectedAmount: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, "$totalAmount", 0] } },
           totalCount: { $sum: 1 },
-          bankCount: { $sum: { $cond: [{ $eq: ["$modeOfPayment", "bank-transfer"] }, 1, 0] } },
-          bankAmount: { $sum: { $cond: [{ $eq: ["$modeOfPayment", "bank-transfer"] }, "$totalAmount", 0] } },
-          cashCount: { $sum: { $cond: [{ $eq: ["$modeOfPayment", "cash"] }, 1, 0] } },
-          cashAmount: { $sum: { $cond: [{ $eq: ["$modeOfPayment", "cash"] }, "$totalAmount", 0] } },
-          posCount: { $sum: { $cond: [{ $eq: ["$modeOfPayment", "pos"] }, 1, 0] } },
-          posAmount: { $sum: { $cond: [{ $eq: ["$modeOfPayment", "pos"] }, "$totalAmount", 0] } },
-          otherCount: { $sum: { $cond: [{ $not: [{ $in: ["$modeOfPayment", ["bank-transfer", "cash", "pos"]] }] }, 1, 0] } },
-          otherAmount: { $sum: { $cond: [{ $not: [{ $in: ["$modeOfPayment", ["bank-transfer", "cash", "pos"]] }] }, "$totalAmount", 0] } },
+          bankCount: {
+            $sum: { $cond: [{ $and: [{ $eq: ["$modeOfPayment", "bank-transfer"] }, { $eq: ["$items.status", "accepted"] }] }, 1, 0] },
+          },
+          bankAmount: {
+            $sum: {
+              $cond: [
+                { $and: [{ $eq: ["$modeOfPayment", "bank-transfer"] }, { $eq: ["$items.status", "accepted"] }] },
+                "$items.amountAtPayment",
+                0,
+              ],
+            },
+          },
+          cashCount: { $sum: { $cond: [{ $and: [{ $eq: ["$modeOfPayment", "cash"] }, { $eq: ["$items.status", "accepted"] }] }, 1, 0] } },
+          cashAmount: {
+            $sum: {
+              $cond: [{ $and: [{ $eq: ["$modeOfPayment", "cash"] }, { $eq: ["$items.status", "accepted"] }] }, "$items.amountAtPayment", 0],
+            },
+          },
+          posCount: { $sum: { $cond: [{ $and: [{ $eq: ["$modeOfPayment", "pos"] }, { $eq: ["$items.status", "accepted"] }] }, 1, 0] } },
+          posAmount: {
+            $sum: {
+              $cond: [{ $and: [{ $eq: ["$modeOfPayment", "pos"] }, { $eq: ["$items.status", "accepted"] }] }, "$items.amountAtPayment", 0],
+            },
+          },
+          otherCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [{ $not: [{ $in: ["$modeOfPayment", ["bank-transfer", "cash", "pos"]] }] }, { $eq: ["$items.status", "accepted"] }],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          otherAmount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [{ $not: [{ $in: ["$modeOfPayment", ["bank-transfer", "cash", "pos"]] }] }, { $eq: ["$items.status", "accepted"] }],
+                },
+                "$items.amountAtPayment",
+                0,
+              ],
+            },
+          },
         },
       },
     ]);
 
-    // 2. Get item/class details (WITH item unwind)
-    const detailsResult = await PaymentRecord.aggregate([
-      { $match: matchStage },
-      { $lookup: { from: "classes", localField: "classId", foreignField: "_id", as: "classInfo" } },
-      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
-      { $lookup: { from: "items", localField: "items.itemId", foreignField: "_id", as: "itemInfo" } },
-      { $unwind: { path: "$itemInfo", preserveNullAndEmptyArrays: true } },
+    // ── 2. ITEM FULFILLMENT (via ItemTransaction collection) ──────────
+    const acceptedPaymentIds = await PaymentRecord.find({
+      ...matchStage,
+      "items.status": "accepted",
+    }).distinct("_id");
+
+    const [pendingItems, collectedItems] = await Promise.all([
+      ItemTransaction.countDocuments({
+        paymentRecordId: { $in: acceptedPaymentIds },
+        status: "pending",
+      }),
+      ItemTransaction.countDocuments({
+        paymentRecordId: { $in: acceptedPaymentIds },
+        status: "collected",
+      }),
+    ]);
+
+    const totalFulfillmentItems = pendingItems + collectedItems;
+
+    // ── 3. TOP PENDING ITEMS (via ItemTransaction) ────────────────────
+    const topPendingItems = await ItemTransaction.aggregate([
       {
-        $facet: {
-          itemFulfillment: [
-            {
-              $group: {
-                _id: null,
-                totalItems: { $sum: { $ifNull: ["$items.quantity", 1] } },
-                collectedItems: { $sum: { $cond: [{ $eq: ["$items.status", "collected"] }, { $ifNull: ["$items.quantity", 1] }, 0] } },
-                pendingItems: { $sum: { $cond: [{ $eq: ["$items.status", "pending"] }, { $ifNull: ["$items.quantity", 1] }, 0] } },
-                unassignedItems: { $sum: { $cond: [{ $eq: ["$items.status", "unassigned"] }, { $ifNull: ["$items.quantity", 1] }, 0] } },
-              },
+        $match: {
+          paymentRecordId: { $in: acceptedPaymentIds },
+          status: "pending",
+        },
+      },
+      {
+        $lookup: {
+          from: "items",
+          localField: "itemId",
+          foreignField: "_id",
+          as: "itemInfo",
+        },
+      },
+      { $unwind: "$itemInfo" },
+      {
+        $group: {
+          _id: "$itemId",
+          itemName: { $first: "$itemInfo.name" },
+          pendingCount: { $sum: "$quantity" },
+        },
+      },
+      { $sort: { pendingCount: -1 } },
+      { $limit: 5 },
+      { $project: { _id: 0, name: "$itemName", count: "$pendingCount" } },
+    ]);
+
+    // ── 4. CLASS BREAKDOWN (Simplified two-step approach) ─────────────
+    // Step A: Get payment counts per class
+    const classPayments = await PaymentRecord.aggregate([
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: "$classId",
+          className: { $first: "$classInfo.name" },
+          paymentsAccepted: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
+          paymentsPartiallyAccepted: { $sum: { $cond: [{ $eq: ["$status", "partially_accepted"] }, 1, 0] } },
+          paymentsPending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+          paymentsRejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
+          totalAmount: { $sum: "$totalAmount" },
+          acceptedItemCount: {
+            $sum: {
+              $cond: [{ $eq: ["$items.status", "accepted"] }, { $ifNull: ["$items.quantity", 1] }, 0],
             },
-          ],
-          topPendingItems: [
-            { $match: { "items.status": "pending" } },
-            {
-              $group: {
-                _id: "$items.itemId",
-                itemName: { $first: "$itemInfo.name" },
-                pendingCount: { $sum: { $ifNull: ["$items.quantity", 1] } },
-              },
-            },
-            { $sort: { pendingCount: -1 } },
-            { $limit: 5 },
-            { $project: { _id: 0, name: "$itemName", count: "$pendingCount" } },
-          ],
-          byClass: [
-            {
-              $group: {
-                _id: "$classId",
-                className: { $first: "$classInfo.name" },
-                paymentsAccepted: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
-                paymentsPending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
-                paymentsRejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-                totalAmount: { $sum: "$totalAmount" },
-                itemsAccepted: { $sum: { $cond: [{ $eq: ["$items.status", "accepted"] }, { $ifNull: ["$items.quantity", 1] }, 0] } },
-                itemsCollected: { $sum: { $cond: [{ $eq: ["$items.status", "collected"] }, { $ifNull: ["$items.quantity", 1] }, 0] } },
-                itemsPending: { $sum: { $cond: [{ $eq: ["$items.status", "pending"] }, { $ifNull: ["$items.quantity", 1] }, 0] } },
-              },
-            },
-            {
-              $addFields: {
-                completionRate: {
-                  $cond: [
-                    { $eq: ["$itemsAccepted", 0] },
-                    0,
-                    { $round: [{ $multiply: [{ $divide: ["$itemsCollected", "$itemsAccepted"] }, 100] }, 1] },
-                  ],
-                },
-                statusBadge: {
-                  $cond: [{ $gte: ["$completionRate", 80] }, "good", { $cond: [{ $gte: ["$completionRate", 50] }, "follow-up", "urgent"] }],
-                },
-              },
-            },
-            { $sort: { totalAmount: -1 } },
-          ],
+          },
+        },
+      },
+      { $sort: { totalAmount: -1 } },
+    ]);
+
+    // Step B: Get fulfillment counts per class via ItemTransaction
+    const classFulfillment = await ItemTransaction.aggregate([
+      {
+        $match: {
+          paymentRecordId: { $in: acceptedPaymentIds },
+          status: "collected",
+        },
+      },
+      {
+        $lookup: {
+          from: "paymentrecords",
+          localField: "paymentRecordId",
+          foreignField: "_id",
+          as: "payment",
+        },
+      },
+      { $unwind: "$payment" },
+      {
+        $group: {
+          _id: "$payment.classId",
+          collectedCount: { $sum: "$quantity" },
         },
       },
     ]);
 
+    // Merge the two results in JavaScript
+    const fulfillmentMap = new Map(classFulfillment.map((c) => [c._id.toString(), c.collectedCount]));
+    const byClassResult = classPayments.map((cls) => {
+      const classId = cls._id?.toString();
+      const itemsCollected = fulfillmentMap.get(classId) || 0;
+      const acceptedItemCount = cls.acceptedItemCount || 0;
+
+      return {
+        _id: cls._id,
+        className: cls.className || "Unknown",
+        paymentsAccepted: cls.paymentsAccepted || 0,
+        paymentsPartiallyAccepted: cls.paymentsPartiallyAccepted || 0,
+        paymentsPending: cls.paymentsPending || 0,
+        paymentsRejected: cls.paymentsRejected || 0,
+        totalAmount: cls.totalAmount || 0,
+        itemsAccepted: acceptedItemCount,
+        itemsCollected,
+        itemsPending: 0, // Could add if needed
+        completionRate: acceptedItemCount > 0 ? Math.round((itemsCollected / acceptedItemCount) * 100) : 0,
+        statusBadge:
+          acceptedItemCount > 0
+            ? itemsCollected / acceptedItemCount >= 0.8
+              ? "good"
+              : itemsCollected / acceptedItemCount >= 0.5
+                ? "follow-up"
+                : "urgent"
+            : "urgent",
+      };
+    });
+
+    // ── FORMAT RESPONSE ──────────────────────────────────────────────
     const summaryRaw = summaryResult[0] || {};
-    const detailsRaw = detailsResult[0] || {};
-    const itemFulfillmentRaw = detailsRaw.itemFulfillment?.[0] || {};
-    const totalCollected = summaryRaw.totalAmount || 0;
+    const totalCollected = summaryRaw.totalRevenue || 0;
 
     const paymentModes = {
       bank: {
@@ -142,31 +260,30 @@ export const getPaymentSummary = async (req, res, next) => {
       },
     };
 
+    // ✅ FIX: Added missing "data:" key
     return res.status(200).json({
-      summary: {
-        totalAmount: summaryRaw.totalAmount || 0,
-        acceptedCount: summaryRaw.acceptedCount || 0,
-        pendingCount: summaryRaw.pendingCount || 0,
-        rejectedCount: summaryRaw.rejectedCount || 0,
-        acceptedAmount: summaryRaw.acceptedAmount || 0,
-        pendingAmount: summaryRaw.pendingAmount || 0,
-        rejectedAmount: summaryRaw.rejectedAmount || 0,
-        totalCount: summaryRaw.totalCount || 0,
-        paymentModes,
+      success: true,
+      data: {
+        summary: {
+          totalAmount: summaryRaw.totalRevenue || 0,
+          pendingRevenue: summaryRaw.pendingRevenue || 0,
+          acceptedCount: summaryRaw.acceptedCount || 0,
+          partiallyAcceptedCount: summaryRaw.partiallyAcceptedCount || 0,
+          pendingCount: summaryRaw.pendingCount || 0,
+          rejectedCount: summaryRaw.rejectedCount || 0,
+          totalCount: summaryRaw.totalCount || 0,
+          paymentModes,
+        },
+        itemFulfillment: {
+          totalItems: totalFulfillmentItems,
+          collected: collectedItems,
+          pending: pendingItems,
+          collectionRate: totalFulfillmentItems > 0 ? Math.round((collectedItems / totalFulfillmentItems) * 100) : 0,
+        },
+        topPendingItems: topPendingItems || [],
+        byClass: byClassResult || [],
+        totalRecords: summaryRaw.totalCount || 0,
       },
-      itemFulfillment: {
-        totalItems: itemFulfillmentRaw.totalItems || 0,
-        collected: itemFulfillmentRaw.collectedItems || 0,
-        pending: itemFulfillmentRaw.pendingItems || 0,
-        unassigned: itemFulfillmentRaw.unassignedItems || 0,
-        collectionRate:
-          itemFulfillmentRaw.totalItems > 0
-            ? Math.round(((itemFulfillmentRaw.collectedItems || 0) / itemFulfillmentRaw.totalItems) * 100)
-            : 0,
-      },
-      topPendingItems: detailsRaw.topPendingItems || [],
-      byClass: detailsRaw.byClass || [],
-      totalRecords: summaryRaw.totalCount || 0,
     });
   } catch (error) {
     console.error("Report Generation Error:", error);

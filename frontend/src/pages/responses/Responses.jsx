@@ -335,8 +335,8 @@ export default function Responses() {
       </div>
 
       {/* ════════════════════════════
-          Detail Modal
-      ════════════════════════════ */}
+    Detail Modal
+════════════════════════════ */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="w-[95vw] sm:w-[85vw] md:w-[70vw] max-w-3xl max-h-[90dvh] overflow-x-hidden overflow-y-auto p-3 sm:p-5 md:p-6">
           <DialogHeader className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b">
@@ -458,20 +458,16 @@ export default function Responses() {
           )}
 
           {/* Footer */}
-          <DialogFooter className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 flex-col sm:flex-row gap-2">
+          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:justify-end gap-2">
             {selectedRecord?.items?.some((item) => item.status === "pending") ? (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => setDetailModalOpen(false)}
-                  className="w-full sm:w-auto order-3 sm:order-1 text-xs sm:text-sm h-9"
-                >
+                <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
                   Cancel
                 </Button>
                 <Button
                   variant="outline"
                   onClick={openRejectModal}
-                  className="w-full sm:w-auto order-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs sm:text-sm h-9"
+                  className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs sm:text-sm h-9"
                   title="Reject all pending items in this payment. Already accepted items will remain approved."
                 >
                   <XCircle size={14} className="mr-1.5 shrink-0" />
@@ -480,7 +476,7 @@ export default function Responses() {
                 <Button
                   onClick={handleAccept}
                   disabled={selectedItemIds.length === 0}
-                  className="w-full sm:w-auto order-1 sm:order-3 bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
+                  className="w-full sm:w-auto bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
                 >
                   <CheckCircle size={14} className="mr-1.5 shrink-0" />
                   <span className="truncate">Accept Selected ({selectedItemIds.length})</span>
@@ -491,7 +487,7 @@ export default function Responses() {
                 Close
               </Button>
             )}
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
