@@ -5,9 +5,6 @@ import User from "../models/user.model.js";
 import Class from "../models/class.model.js";
 import Item from "../models/items-fess.model.js";
 
-// ─────────────────────────────────────────────────────────────────────
-// CREATE PAYMENT RECORD (Public - Parent Form Submission)
-// ─────────────────────────────────────────────────────────────────────
 export const createPaymentRecord = async (req, res, next) => {
   const {
     nameOfChild,
@@ -22,33 +19,8 @@ export const createPaymentRecord = async (req, res, next) => {
     items,
   } = req.body;
 
-  // Basic field validation
-  if (!nameOfChild) {
-    const err = new Error("Name of child is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (!classId) {
-    const err = new Error("Class is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (!nameOfPayerOrCompany) {
-    const err = new Error("Name of payer or company is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (!dateOfPayment) {
-    const err = new Error("Date of payment is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (!modeOfPayment) {
-    const err = new Error("Mode of payment is required");
+  if (!nameOfChild || !classId || !nameOfPayerOrCompany || !dateOfPayment || !modeOfPayment || !bankOrPaymentSourceName || !session) {
+    const err = new Error("Missing required fields");
     err.statusCode = 400;
     return next(err);
   }
@@ -59,40 +31,21 @@ export const createPaymentRecord = async (req, res, next) => {
     return next(err);
   }
 
-  if (!bankOrPaymentSourceName) {
-    const err = new Error("Bank or payment source name is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (!session) {
-    const err = new Error("Session is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
   if (!items || !Array.isArray(items) || items.length === 0) {
     const err = new Error("At least one item is required");
     err.statusCode = 400;
     return next(err);
   }
 
-  // Validate each item structure
   for (const item of items) {
-    if (!item.itemId) {
-      const err = new Error("Each item must have an itemId");
-      err.statusCode = 400;
-      return next(err);
-    }
-    if (!item.quantity || item.quantity < 1) {
-      const err = new Error("Each item must have a valid quantity");
+    if (!item.itemId || !item.quantity || item.quantity < 1) {
+      const err = new Error("Each item must have a valid itemId and quantity");
       err.statusCode = 400;
       return next(err);
     }
   }
 
   try {
-    // Validate class exists
     const existingClass = await Class.findById(classId);
     if (!existingClass) {
       const err = new Error("Class not found");
@@ -100,31 +53,25 @@ export const createPaymentRecord = async (req, res, next) => {
       return next(err);
     }
 
-    // Validate all itemIds exist in the DB
     const itemIds = items.map((item) => item.itemId);
     const existingItems = await Item.find({ _id: { $in: itemIds } });
-
     if (existingItems.length !== itemIds.length) {
       const err = new Error("One or more items do not exist");
       err.statusCode = 404;
       return next(err);
     }
 
-    // Build items array using prices from the DB (prevent frontend price manipulation)
     const itemsWithAmount = items.map((item) => {
       const dbItem = existingItems.find((i) => i._id.toString() === item.itemId.toString());
       return {
         itemId: item.itemId,
         quantity: item.quantity,
         amountAtPayment: dbItem.price,
-        status: "pending", // Default status for new items
+        status: "pending",
       };
     });
 
-    // Calculate total amount using prices from the DB
-    const totalAmount = itemsWithAmount.reduce((sum, item) => {
-      return sum + item.quantity * item.amountAtPayment;
-    }, 0);
+    const totalAmount = itemsWithAmount.reduce((sum, item) => sum + item.quantity * item.amountAtPayment, 0);
 
     const newPaymentRecord = await PaymentRecord.create({
       nameOfChild,
@@ -152,31 +99,15 @@ export const createPaymentRecord = async (req, res, next) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────
-// GET ALL PAYMENT RECORDS (Admin Only)
-// ─────────────────────────────────────────────────────────────────────
 export const getAllPaymentRecords = async (req, res, next) => {
   const { status, classId, session, term, search, page = 1, limit = 20 } = req.query;
 
   try {
     const filter = {};
-
-    if (status) {
-      filter.status = status;
-    }
-
-    if (classId) {
-      filter.classId = classId;
-    }
-
-    if (session) {
-      filter.session = session;
-    }
-
-    if (term) {
-      filter.term = term;
-    }
-
+    if (status) filter.status = status;
+    if (classId) filter.classId = classId;
+    if (session) filter.session = session;
+    if (term) filter.term = term;
     if (search) {
       filter.$or = [{ nameOfChild: { $regex: search, $options: "i" } }, { nameOfPayerOrCompany: { $regex: search, $options: "i" } }];
     }
@@ -208,12 +139,8 @@ export const getAllPaymentRecords = async (req, res, next) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────
-// GET PAYMENT RECORD BY ID (Admin Only)
-// ─────────────────────────────────────────────────────────────────────
 export const getPaymentRecordById = async (req, res, next) => {
   const { id } = req.params;
-
   if (!id) {
     const err = new Error("Payment record ID is required");
     err.statusCode = 400;
@@ -233,10 +160,7 @@ export const getPaymentRecordById = async (req, res, next) => {
       return next(err);
     }
 
-    // Get associated ItemTransactions for this payment
-    const itemTransactions = await ItemTransaction.find({
-      paymentRecordId: paymentRecord._id,
-    })
+    const itemTransactions = await ItemTransaction.find({ paymentRecordId: paymentRecord._id })
       .populate("itemId", "name")
       .populate("staffIds", "fullName email");
 
@@ -252,24 +176,12 @@ export const getPaymentRecordById = async (req, res, next) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────
-// UPDATE PAYMENT RECORD (Admin Only) - Accept/Reject Items
-// ─────────────────────────────────────────────────────────────────────
 export const updatePaymentRecordById = async (req, res, next) => {
   const { id } = req.params;
   const { action, acceptedItemIds, rejectionReason } = req.body;
-  // action: "accept" | "reject"
-  // acceptedItemIds: string[] — the item subdoc _ids admin checked (for accept)
-  // rejectionReason: string (for reject)
 
-  if (!id) {
-    const err = new Error("Payment record ID is required");
-    err.statusCode = 400;
-    return next(err);
-  }
-
-  if (!action || !["accept", "reject"].includes(action)) {
-    const err = new Error("action must be 'accept' or 'reject'");
+  if (!id || !action || !["accept", "reject"].includes(action)) {
+    const err = new Error("Invalid request parameters");
     err.statusCode = 400;
     return next(err);
   }
@@ -299,11 +211,10 @@ export const updatePaymentRecordById = async (req, res, next) => {
       paymentRecord.items.forEach((item) => {
         if (item.status === "pending") item.status = "rejected";
       });
-      paymentRecord.status = "rejected";
       paymentRecord.rejectionReason = rejectionReason;
       paymentRecord.rejectedAt = new Date();
       paymentRecord.rejectedBy = req.user.id;
-
+      // Middleware will auto-set status = "rejected" since all items are now rejected
       await paymentRecord.save();
 
       const populatedRecord = await PaymentRecord.findById(paymentRecord._id)
@@ -317,38 +228,30 @@ export const updatePaymentRecordById = async (req, res, next) => {
       });
     }
 
-    // ── ACCEPT SELECTED ITEMS ────────────────────────────────────────
+    // ── ACCEPT SELECTED ITEMS ───────────────────────────────────────
     const newlyAcceptedItems = [];
 
     paymentRecord.items.forEach((item) => {
       const isSelected = acceptedItemIds.includes(item._id.toString());
-      // Only accept items that are still pending — never downgrade already-accepted/rejected
       if (isSelected && item.status === "pending") {
         item.status = "accepted";
         newlyAcceptedItems.push(item);
       }
     });
 
-    paymentRecord.status = "accepted";
+    // Do NOT manually set paymentRecord.status — middleware auto-calculates it
     paymentRecord.acceptedAt = new Date();
     paymentRecord.acceptedBy = req.user.id;
 
     await paymentRecord.save();
 
-    // ── AUTO-CREATE ITEM TRANSACTIONS ────────────────────────────────
+    // ── AUTO-CREATE ITEM TRANSACTIONS ──────────────────────────────
     const transactionDocs = [];
 
     for (const item of newlyAcceptedItems) {
-      // Find all roles that handle this item
       const roles = await Role.find({ itemIds: item.itemId });
       const roleIds = roles.map((r) => r._id);
-
-      // Find all active staff assigned those roles
-      const staffMembers = await User.find({
-        roles: { $in: roleIds },
-        userType: "staff",
-      });
-
+      const staffMembers = await User.find({ roles: { $in: roleIds }, userType: "staff" });
       const staffIds = staffMembers.map((s) => s._id);
 
       transactionDocs.push({
@@ -371,7 +274,6 @@ export const updatePaymentRecordById = async (req, res, next) => {
 
     const createdTransactions = await ItemTransaction.insertMany(transactionDocs);
 
-    // Populate response for easier frontend use
     const populatedRecord = await PaymentRecord.findById(paymentRecord._id)
       .populate("classId", "name")
       .populate("items.itemId", "name")
@@ -385,7 +287,7 @@ export const updatePaymentRecordById = async (req, res, next) => {
       .populate("staffIds", "fullName email");
 
     return res.status(200).json({
-      message: "Payment record accepted",
+      message: "Payment record updated",
       paymentRecord: populatedRecord,
       createdTransactions: populatedTransactions,
     });

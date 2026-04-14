@@ -35,10 +35,11 @@ const paymentRecordSchema = new mongoose.Schema(
       },
     ],
     totalAmount: { type: Number, required: true, min: 0 },
+    // Parent status: auto-calculated from items[].status
     status: {
       type: String,
       required: true,
-      enum: ["pending", "accepted", "rejected"],
+      enum: ["pending", "partially_accepted", "accepted", "rejected"],
       default: "pending",
     },
     acceptedAt: { type: Date, default: null },
@@ -50,17 +51,34 @@ const paymentRecordSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ── PERFORMANCE INDEXES ─────────────────────────────────────────────
-//  Primary report filter: date range + status + class
+// Auto-calculate parent status based on item statuses
+paymentRecordSchema.pre("save", function (next) {
+  if (!this.isModified("items")) return next();
+
+  const statuses = this.items.map((i) => i.status || "pending");
+  const allAccepted = statuses.every((s) => s === "accepted");
+  const allRejected = statuses.every((s) => s === "rejected");
+  const anyAccepted = statuses.some((s) => s === "accepted");
+
+  if (allAccepted) {
+    this.status = "accepted";
+    this.acceptedAt ||= new Date();
+  } else if (allRejected) {
+    this.status = "rejected";
+    this.rejectedAt ||= new Date();
+  } else if (anyAccepted) {
+    this.status = "partially_accepted";
+    this.acceptedAt ||= new Date();
+  } else {
+    this.status = "pending";
+  }
+
+  next();
+});
+
 paymentRecordSchema.index({ dateOfPayment: 1, status: 1, classId: 1 });
-
-//  Item-level aggregation: filter by item status + lookup by itemId
 paymentRecordSchema.index({ "items.status": 1, "items.itemId": 1 });
-
-//  Mode of payment breakdown (for paymentModes report)
 paymentRecordSchema.index({ modeOfPayment: 1, dateOfPayment: 1 });
-
-//  Text search on child/payer names (optional but useful for future)
 paymentRecordSchema.index({ nameOfChild: "text", nameOfPayerOrCompany: "text" });
 
 const PaymentRecord = mongoose.model("PaymentRecord", paymentRecordSchema);
