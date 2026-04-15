@@ -163,7 +163,7 @@ export default function Responses() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
-    const margin = 15;
+    const margin = 12;
     const contentW = pageW - margin * 2;
 
     // ── Color Palette ─────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ export default function Responses() {
       doc.roundedRect(x, y, w, h, r, r, "F");
     };
 
-    // ✅ FIX: Use "NGN" instead of "₦" to avoid encoding issues
+    // ✅ Use "NGN" instead of "₦" to avoid encoding issues in PDF
     const formatCurrencyPDF = (amt) => {
       const num = typeof amt === "number" ? amt : 0;
       return `NGN ${num.toLocaleString()}`;
@@ -223,6 +223,7 @@ export default function Responses() {
     doc.text(`Generated: ${new Date().toLocaleString("en-NG")}`, pageW - margin, 20, { align: "right" });
     doc.text(`Records: ${paymentRecords.length}`, pageW - margin, 27, { align: "right" });
 
+    // Filter summary bar
     filledRect(margin, 38, contentW, 12, 2, PRIMARY_LIGHT);
     doc
       .setFontSize(7)
@@ -241,17 +242,18 @@ export default function Responses() {
       .setLineWidth(0.3)
       .line(0, 52, pageW, 52);
 
-    // ── TABLE SETUP ───────────────────────────────────────────────────────
+    // ── TABLE SETUP (7 columns with proper grammar headers) ─────────────────
     const tableStartY = 60;
 
-    // ✅ FIX: Removed "Submitted" column to reduce confusion
+    // ✅ Proper grammar: "Payment Date" and "Date Submitted"
     const columns = [
-      { header: "Child Name", dataKey: "child", width: 42, align: "left" },
-      { header: "Class", dataKey: "class", width: 24, align: "left" },
-      { header: "Payer", dataKey: "payer", width: 38, align: "left" },
-      { header: "Amount", dataKey: "amount", width: 28, align: "right" },
-      { header: "Payment Date", dataKey: "paymentDate", width: 28, align: "center" },
-      { header: "Status", dataKey: "status", width: 22, align: "center" },
+      { header: "Child Name", dataKey: "child", width: 32, align: "left" },
+      { header: "Class", dataKey: "class", width: 20, align: "left" },
+      { header: "Payer", dataKey: "payer", width: 30, align: "left" },
+      { header: "Amount", dataKey: "amount", width: 24, align: "right" },
+      { header: "Payment Date", dataKey: "paymentDate", width: 24, align: "center" },
+      { header: "Date Submitted", dataKey: "submitted", width: 24, align: "center" },
+      { header: "Status", dataKey: "status", width: 18, align: "center" },
     ];
 
     const rows = paymentRecords.map((record) => ({
@@ -260,6 +262,7 @@ export default function Responses() {
       payer: record.nameOfPayerOrCompany,
       amount: formatCurrencyPDF(record.totalAmount),
       paymentDate: new Date(record.dateOfPayment).toLocaleDateString("en-NG"),
+      submitted: new Date(record.createdAt).toLocaleDateString("en-NG"),
       status: formatStatus(record.status),
     }));
 
@@ -272,15 +275,15 @@ export default function Responses() {
       headStyles: {
         fillColor: PRIMARY,
         textColor: WHITE,
-        fontSize: 7.5,
+        fontSize: 7,
         fontStyle: "bold",
-        cellPadding: 4,
+        cellPadding: 3,
         lineWidth: 0,
         halign: "center",
       },
       bodyStyles: {
-        fontSize: 7,
-        cellPadding: 3,
+        fontSize: 6.5,
+        cellPadding: 2.5,
         textColor: SLATE_900,
         lineWidth: 0.1,
         lineColor: SLATE_200,
@@ -302,17 +305,20 @@ export default function Responses() {
       },
       margin: { left: margin, right: margin },
       didParseCell: (hookData) => {
-        if (hookData.column.index === 5 && hookData.section === "body") {
+        // Color-code status column
+        if (hookData.column.index === 6 && hookData.section === "body") {
           const statusText = hookData.cell.raw;
           hookData.cell.styles.textColor = getStatusColor(statusText);
           hookData.cell.styles.fontStyle = "bold";
         }
+        // Right-align amounts
         if (hookData.column.index === 3) {
           hookData.cell.styles.halign = "right";
           hookData.cell.styles.fontStyle = "bold";
         }
       },
       didDrawPage: (data) => {
+        // Footer on every page
         const footerY = pageH - 15;
         doc
           .setDrawColor(...SLATE_400)

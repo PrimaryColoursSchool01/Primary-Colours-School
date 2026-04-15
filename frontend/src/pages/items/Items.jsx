@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { getAllItems, createItem, updateItem, deleteItem } from "@/services/itemfees.service";
 import AddItemModal from "./AddItemModal";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,7 @@ function formatClassDisplay(classNames, scope, maxDisplay = 3) {
 
   if (scope === "section") {
     return {
-      display: `All ${scope === "section" ? "" : ""}${classNames.length > 0 ? "" : "Classes"}`,
+      display: `All ${scope === "section" ? "" : ""}${classNames.length > 0 ? "" : "All Classes"}`,
       showCount: false,
     };
   }
@@ -267,6 +269,193 @@ export default function Items() {
     setModalOpen(true);
   };
 
+  // ─── PDF Export Function ───────────────────────────────────────────────────
+
+  const handleExportPDF = () => {
+    if (!items.length) {
+      toast.error("No items to export");
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - margin * 2;
+
+    // ── Color Palette ─────────────────────────────────────────────────────
+    const PRIMARY = [19, 109, 236]; // #136dec
+    const PRIMARY_DARK = [12, 85, 180];
+    const PRIMARY_LIGHT = [235, 244, 255];
+    const SUCCESS = [22, 163, 74];
+    const OPTIONAL = [100, 116, 139]; // slate-500
+    const SLATE_900 = [15, 23, 42];
+    const SLATE_600 = [71, 85, 105];
+    const SLATE_400 = [148, 163, 184];
+    const SLATE_200 = [226, 232, 240];
+    const SLATE_50 = [248, 250, 252];
+    const WHITE = [255, 255, 255];
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    const filledRect = (x, y, w, h, r, color) => {
+      doc.setFillColor(...color);
+      doc.roundedRect(x, y, w, h, r, r, "F");
+    };
+
+    // ✅ Use "NGN" instead of "₦" to avoid encoding issues in PDF
+    const formatCurrencyPDF = (amt) => {
+      const num = typeof amt === "number" ? amt : 0;
+      return `NGN ${num.toLocaleString()}`;
+    };
+
+    const getScopeLabel = (scope) => {
+      switch (scope) {
+        case "global":
+          return "School-Wide";
+        case "section":
+          return "By Section";
+        case "class":
+          return "By Class";
+        default:
+          return scope;
+      }
+    };
+
+    // ── HEADER ────────────────────────────────────────────────────────────
+    filledRect(0, 0, pageW, 45, 0, PRIMARY_DARK);
+
+    doc
+      .setFontSize(18)
+      .setFont("helvetica", "bold")
+      .setTextColor(...WHITE)
+      .text("Primary Colours School", margin, 20);
+
+    doc.setFontSize(11).setFont("helvetica", "normal").setTextColor(220, 235, 255).text("Fees & Items Master List", margin, 28);
+
+    doc.setFontSize(7).setTextColor(220, 235, 255);
+    doc.text(`Generated: ${new Date().toLocaleString("en-NG")}`, pageW - margin, 20, { align: "right" });
+    doc.text(`Total Items: ${items.length}`, pageW - margin, 27, { align: "right" });
+
+    // Filter summary bar
+    filledRect(margin, 38, contentW, 12, 2, PRIMARY_LIGHT);
+    doc
+      .setFontSize(7)
+      .setFont("helvetica", "bold")
+      .setTextColor(...PRIMARY);
+
+    let filterParts = [];
+    if (activeTab !== "all") filterParts.push(`📋 ${TABS.find((t) => t.key === activeTab)?.label}`);
+    if (search.trim()) filterParts.push(`🔍 "${search}"`);
+
+    doc.text(filterParts.length > 0 ? `Filters: ${filterParts.join("  •  ")}` : "Filters: None", margin + 4, 45.5);
+
+    doc
+      .setDrawColor(...SLATE_200)
+      .setLineWidth(0.3)
+      .line(0, 52, pageW, 52);
+
+    // ── TABLE SETUP ───────────────────────────────────────────────────────
+    const tableStartY = 60;
+
+    const columns = [
+      { header: "Item Name", dataKey: "name", width: 45, align: "left" },
+      { header: "Scope", dataKey: "scope", width: 22, align: "center" },
+      { header: "Section", dataKey: "section", width: 28, align: "left" },
+      { header: "Classes", dataKey: "classes", width: 35, align: "left" },
+      { header: "Price", dataKey: "price", width: 24, align: "right" },
+      { header: "Type", dataKey: "type", width: 18, align: "center" },
+    ];
+
+    const rows = items.map((item) => {
+      const classDisplay = formatClassDisplay(item.classNames, item.scope);
+      return {
+        name: item.name,
+        scope: getScopeLabel(item.scope),
+        section: item.sectionName || "—",
+        classes: classDisplay.display,
+        price: formatCurrencyPDF(item.price),
+        type: item.compulsory ? "Required" : "Optional",
+      };
+    });
+
+    // ── AUTO TABLE ────────────────────────────────────────────────────────
+    autoTable(doc, {
+      startY: tableStartY,
+      head: [columns.map((col) => col.header)],
+      body: rows.map((row) => columns.map((col) => row[col.dataKey])),
+      theme: "striped",
+      headStyles: {
+        fillColor: PRIMARY,
+        textColor: WHITE,
+        fontSize: 7.5,
+        fontStyle: "bold",
+        cellPadding: 4,
+        lineWidth: 0,
+        halign: "center",
+      },
+      bodyStyles: {
+        fontSize: 7,
+        cellPadding: 3,
+        textColor: SLATE_900,
+        lineWidth: 0.1,
+        lineColor: SLATE_200,
+      },
+      alternateRowStyles: {
+        fillColor: SLATE_50,
+      },
+      columnStyles: columns.reduce((acc, col, idx) => {
+        acc[idx] = {
+          cellWidth: col.width,
+          halign: col.align,
+          fontStyle: idx === 0 ? "bold" : "normal", // Item name bold
+        };
+        return acc;
+      }, {}),
+      styles: {
+        overflow: "linebreak",
+        halign: "left",
+      },
+      margin: { left: margin, right: margin },
+      didParseCell: (hookData) => {
+        // Color-code Type column
+        if (hookData.column.index === 5 && hookData.section === "body") {
+          const typeText = hookData.cell.raw;
+          if (typeText === "Required") {
+            hookData.cell.styles.textColor = SUCCESS;
+            hookData.cell.styles.fontStyle = "bold";
+          } else {
+            hookData.cell.styles.textColor = OPTIONAL;
+          }
+        }
+        // Right-align prices
+        if (hookData.column.index === 4) {
+          hookData.cell.styles.halign = "right";
+          hookData.cell.styles.fontStyle = "bold";
+        }
+      },
+      didDrawPage: (data) => {
+        // Footer on every page
+        const footerY = pageH - 15;
+        doc
+          .setDrawColor(...SLATE_400)
+          .setLineWidth(0.2)
+          .line(margin, footerY, pageW - margin, footerY);
+
+        doc
+          .setFontSize(6)
+          .setFont("helvetica", "normal")
+          .setTextColor(...SLATE_400);
+
+        doc.text("Primary Colours School • Confidential", margin, footerY + 5);
+        doc.text(`Page ${data.pageNumber} of ${data.pageCount}`, pageW - margin, footerY + 5, { align: "right" });
+      },
+    });
+
+    const filename = `Items_Master_List_${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+    toast.success("PDF exported successfully");
+  };
+
   // ─── Filter & Pagination ───────────────────────────────────────────────────
 
   const filtered = items.filter((item) => {
@@ -296,9 +485,13 @@ export default function Items() {
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage fees, levies, and items across the school.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button className="h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
+            {/* ✅ Export PDF Button */}
+            <button
+              onClick={handleExportPDF}
+              className="h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+            >
               <Download size={14} />
-              <span className="hidden sm:inline">Export</span>
+              <span className="hidden sm:inline">Export PDF</span>
             </button>
             <button
               onClick={() => {
