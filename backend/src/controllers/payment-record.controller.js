@@ -100,14 +100,26 @@ export const createPaymentRecord = async (req, res, next) => {
 };
 
 export const getAllPaymentRecords = async (req, res, next) => {
-  const { status, classId, session, term, search, page = 1, limit = 20 } = req.query;
+  const { status, classId, startDate, endDate, search, page = 1, limit = 20 } = req.query; // Removed 'session' and 'term'
 
   try {
     const filter = {};
-    if (status) filter.status = status;
-    if (classId) filter.classId = classId;
-    if (session) filter.session = session;
-    if (term) filter.term = term;
+
+    if (status && status !== "all") filter.status = status;
+    if (classId) filter.classId = new mongoose.Types.ObjectId(classId);
+
+    // ── NEW: Date Range Filter ─────────────────────────────────────
+    if (startDate || endDate) {
+      filter.dateOfPayment = {};
+      if (startDate) filter.dateOfPayment.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999); // Include entire end day
+        filter.dateOfPayment.$lte = end;
+      }
+    }
+
+    // Search filter (independent)
     if (search) {
       filter.$or = [{ nameOfChild: { $regex: search, $options: "i" } }, { nameOfPayerOrCompany: { $regex: search, $options: "i" } }];
     }

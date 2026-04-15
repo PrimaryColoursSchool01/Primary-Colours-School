@@ -59,77 +59,7 @@ const PAYMENT_MODE_LABELS = {
   other: "Other",
 };
 
-// ─── Mock Data (Updated to match new backend structure) ─────────────────────
-const MOCK_DATA = {
-  summary: {
-    totalAmount: 12400000,
-    pendingRevenue: 2400000,
-    acceptedCount: 450,
-    partiallyAcceptedCount: 45,
-    pendingCount: 32,
-    rejectedCount: 8,
-    totalCount: 490,
-    paymentModes: {
-      bank: { count: 290, amount: 8100000, percentage: 65 },
-      cash: { count: 90, amount: 1500000, percentage: 12 },
-      pos: { count: 50, amount: 600000, percentage: 5 },
-      other: { count: 20, amount: 250000, percentage: 2 },
-    },
-  },
-  itemFulfillment: {
-    totalItems: 1246,
-    collected: 980,
-    pending: 210,
-    collectionRate: 79,
-  },
-  topPendingItems: [
-    { name: "Uniform SS1", count: 45 },
-    { name: "Textbooks JSS2", count: 32 },
-    { name: "School Meals", count: 28 },
-    { name: "Sports Kit", count: 19 },
-    { name: "Lab Coat", count: 15 },
-  ],
-  byClass: [
-    {
-      _id: "1",
-      className: "Infant - Baby",
-      paymentsAccepted: 45,
-      paymentsPartiallyAccepted: 5,
-      paymentsPending: 3,
-      paymentsRejected: 1,
-      totalAmount: 2400000,
-      itemsAccepted: 180,
-      itemsCollected: 160,
-      completionRate: 88.9,
-      statusBadge: "good",
-    },
-    {
-      _id: "2",
-      className: "Primary - JSS1",
-      paymentsAccepted: 38,
-      paymentsPartiallyAccepted: 4,
-      paymentsPending: 4,
-      paymentsRejected: 2,
-      totalAmount: 1900000,
-      itemsAccepted: 152,
-      itemsCollected: 120,
-      completionRate: 78.9,
-      statusBadge: "follow-up",
-    },
-  ],
-  totalRecords: 490,
-};
-
-const MOCK_CLASSES = [
-  { _id: "1", name: "Infant - Baby" },
-  { _id: "2", name: "Primary - JSS1" },
-  { _id: "3", name: "Secondary - SS2" },
-  { _id: "4", name: "Primary - JSS2" },
-  { _id: "5", name: "Infant - Nursery" },
-];
-
 export default function Reports() {
-  const [useMockData, setUseMockData] = useState(false);
   const [filters, setFilters] = useState({ startDate: "", endDate: "", classId: "all", status: "all" });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -137,30 +67,25 @@ export default function Reports() {
   const [classes, setClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
 
-  // Fetch classes
+  // Fetch classes from API
   useEffect(() => {
-    if (!useMockData) {
-      const fetchClasses = async () => {
-        setClassesLoading(true);
-        try {
-          const res = await getAllClasses();
-          const classList = res?.classes || res?.data?.classes || [];
-          setClasses(classList);
-        } catch (err) {
-          console.error("Failed to fetch classes:", err);
-          toast.error("Could not load classes");
-          setClasses(MOCK_CLASSES);
-        } finally {
-          setClassesLoading(false);
-        }
-      };
-      fetchClasses();
-    } else {
-      setClasses(MOCK_CLASSES);
-    }
-  }, [useMockData]);
+    const fetchClasses = async () => {
+      setClassesLoading(true);
+      try {
+        const res = await getAllClasses();
+        const classList = res?.classes || res?.data?.classes || [];
+        setClasses(classList);
+      } catch (err) {
+        console.error("Failed to fetch classes:", err);
+        toast.error("Could not load classes");
+      } finally {
+        setClassesLoading(false);
+      }
+    };
+    fetchClasses();
+  }, []);
 
-  // Fetch report
+  // Fetch report from API
   const fetchReport = useCallback(async () => {
     if (!filters.startDate || !filters.endDate) {
       toast.error("Please select a date range");
@@ -169,28 +94,23 @@ export default function Reports() {
     setLoading(true);
     setError(null);
     try {
-      if (useMockData) {
-        await new Promise((r) => setTimeout(r, 800));
-        setData(MOCK_DATA);
-        toast.success("Mock report generated");
-      } else {
-        const params = {
-          startDate: filters.startDate,
-          endDate: filters.endDate,
-        };
-        if (filters.classId && filters.classId !== "all") params.classId = filters.classId;
-        if (filters.status && filters.status !== "all") params.status = filters.status;
-        const res = await getPaymentSummary(params);
-        setData(res.data);
-        toast.success("Report generated successfully");
-      }
+      const params = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      };
+      if (filters.classId && filters.classId !== "all") params.classId = filters.classId;
+      if (filters.status && filters.status !== "all") params.status = filters.status;
+
+      const res = await getPaymentSummary(params);
+      setData(res.data);
+      toast.success("Report generated successfully");
     } catch (err) {
       setError(err.message || "Failed to fetch report");
       toast.error("Failed to generate report");
     } finally {
       setLoading(false);
     }
-  }, [filters, useMockData]);
+  }, [filters]);
 
   // PDF Export
   const handleExportPDF = useCallback(async () => {
@@ -404,7 +324,7 @@ export default function Reports() {
     toast.success("Report downloaded successfully");
   }, [data, filters]);
 
-  // Pie chart data — FIX: replaced [_, info] with [, info] to avoid no-unused-vars
+  // Pie chart data
   const paymentModeChartData = useMemo(() => {
     if (!data?.summary?.paymentModes) return [];
     return Object.entries(data.summary.paymentModes)
@@ -416,7 +336,7 @@ export default function Reports() {
       }));
   }, [data]);
 
-  // FIX: Declare summary so all JSX references below resolve correctly
+  // Declare summary for JSX
   const summary = data?.summary || {};
 
   return (
@@ -434,20 +354,6 @@ export default function Reports() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-0.5">
-              <button
-                onClick={() => setUseMockData(true)}
-                className={`px-2.5 py-1 text-[10px] sm:text-xs font-medium rounded-md transition-all ${useMockData ? "bg-[#136dec] text-white" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Mock
-              </button>
-              <button
-                onClick={() => setUseMockData(false)}
-                className={`px-2.5 py-1 text-[10px] sm:text-xs font-medium rounded-md transition-all ${!useMockData ? "bg-[#136dec] text-white" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Live
-              </button>
-            </div>
             <Button
               variant="outline"
               size="sm"
@@ -495,13 +401,9 @@ export default function Reports() {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">Class</label>
-              <Select
-                value={filters.classId}
-                onValueChange={(v) => setFilters({ ...filters, classId: v })}
-                disabled={classesLoading && !useMockData}
-              >
+              <Select value={filters.classId} onValueChange={(v) => setFilters({ ...filters, classId: v })} disabled={classesLoading}>
                 <SelectTrigger className="h-9 text-xs sm:text-sm">
-                  <SelectValue placeholder={classesLoading && !useMockData ? "Loading..." : "All Classes"} />
+                  <SelectValue placeholder={classesLoading ? "Loading..." : "All Classes"} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Classes</SelectItem>
