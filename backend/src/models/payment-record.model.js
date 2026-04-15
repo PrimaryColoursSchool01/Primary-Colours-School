@@ -46,6 +46,40 @@ const paymentRecordSchema = new mongoose.Schema(
     rejectionReason: { type: String, trim: true, default: null },
     rejectedAt: { type: Date, default: null },
     rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
+    // ── PAYMENT EVIDENCE (Text or Compressed Image in DB) ───────────────
+    paymentEvidence: {
+      type: {
+        type: String,
+        enum: ["text", "image"],
+        required: true,
+      },
+      textReference: {
+        type: String,
+        trim: true,
+        maxlength: 150,
+        required: function () {
+          return this.paymentEvidence?.type === "text";
+        },
+      },
+      // ✅ Buffer (BinData) — no Base64 bloat, compressed via sharp before saving
+      image: {
+        data: {
+          type: Buffer,
+          required: function () {
+            return this.paymentEvidence?.type === "image";
+          },
+        },
+        contentType: {
+          type: String,
+          enum: ["image/jpeg", "image/png", "image/webp"],
+          required: function () {
+            return this.paymentEvidence?.type === "image";
+          },
+        },
+      },
+      uploadedAt: { type: Date, default: Date.now },
+    },
   },
   { timestamps: true },
 );
