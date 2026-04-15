@@ -4,6 +4,7 @@ import Role from "../models/role.model.js";
 import User from "../models/user.model.js";
 import Class from "../models/class.model.js";
 import Item from "../models/items-fess.model.js";
+import sharp from "sharp";
 
 export const createPaymentRecord = async (req, res, next) => {
   const {
@@ -17,8 +18,12 @@ export const createPaymentRecord = async (req, res, next) => {
     term,
     session,
     items,
+    // ── Payment Evidence Fields ───────────────────────────────
+    paymentEvidenceType, // 'text' or 'image'
+    paymentEvidenceText, // Text reference (if type='text')
   } = req.body;
 
+  // ── Existing Validation (keep your current checks) ──────────
   if (!nameOfChild || !classId || !nameOfPayerOrCompany || !dateOfPayment || !modeOfPayment || !bankOrPaymentSourceName || !session) {
     const err = new Error("Missing required fields");
     err.statusCode = 400;
@@ -45,7 +50,54 @@ export const createPaymentRecord = async (req, res, next) => {
     }
   }
 
+  // ── Payment Evidence Validation ─────────────────────────────
+  if (!paymentEvidenceType || !["text", "image"].includes(paymentEvidenceType)) {
+    const err = new Error("Payment evidence type is required");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  if (paymentEvidenceType === "text" && !paymentEvidenceText?.trim()) {
+    const err = new Error("Payment reference is required for text evidence");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  // ── Handle Image: Compress with sharp → Buffer ──────────────
+  let imageBuffer = null;
+  let contentType = null;
+
+  if (paymentEvidenceType === "image" && req.file) {
+    try {
+      // Compress: 800px max width, 60% quality, JPEG output
+      const compressed = await sharp(req.file.buffer)
+        .resize({ width: 800, withoutEnlargement: true })
+        .jpeg({ quality: 60, progressive: true })
+        .toBuffer();
+
+      // Hard size guard: 300KB max after compression
+      if (compressed.length > 300 * 1024) {
+        const err = new Error("Image too large after compression. Please use a smaller photo.");
+        err.statusCode = 400;
+        return next(err);
+      }
+
+      imageBuffer = compressed;
+      contentType = "image/jpeg";
+    } catch (error) {
+      console.error("Sharp compression failed:", error);
+      const err = new Error("Failed to process image. Please try a different photo.");
+      err.statusCode = 400;
+      return next(err);
+    }
+  } else if (paymentEvidenceType === "image" && !req.file) {
+    const err = new Error("Image file is required for image evidence");
+    err.statusCode = 400;
+    return next(err);
+  }
+
   try {
+    // ── Existing Class/Item Validation (keep your current logic) ─
     const existingClass = await Class.findById(classId);
     if (!existingClass) {
       const err = new Error("Class not found");
@@ -73,6 +125,22 @@ export const createPaymentRecord = async (req, res, next) => {
 
     const totalAmount = itemsWithAmount.reduce((sum, item) => sum + item.quantity * item.amountAtPayment, 0);
 
+    // ── Build Payment Evidence Object ─────────────────────────
+    const paymentEvidence = {
+      type: paymentEvidenceType,
+      uploadedAt: new Date(),
+    };
+
+    if (paymentEvidenceType === "text") {
+      paymentEvidence.textReference = paymentEvidenceText.trim();
+    } else {
+      paymentEvidence.image = {
+        imageBuffer,
+        contentType,
+      };
+    }
+
+    // ── Create Payment Record ─────────────────────────────────
     const newPaymentRecord = await PaymentRecord.create({
       nameOfChild,
       classId,
@@ -86,6 +154,7 @@ export const createPaymentRecord = async (req, res, next) => {
       items: itemsWithAmount,
       totalAmount,
       status: "pending",
+      paymentEvidence, // ← Add evidence
     });
 
     return res.status(201).json({

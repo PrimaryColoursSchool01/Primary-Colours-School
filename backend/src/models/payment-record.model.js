@@ -52,7 +52,9 @@ const paymentRecordSchema = new mongoose.Schema(
       type: {
         type: String,
         enum: ["text", "image"],
-        required: true,
+        required: function () {
+          return this.isNew; // ✅ compulsory on new records, safe on old ones being updated
+        },
       },
       textReference: {
         type: String,

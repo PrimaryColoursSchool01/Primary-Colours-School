@@ -1,5 +1,5 @@
-// routes/payment-record.routes.js
 import { Router } from "express";
+import multer from "multer";
 import {
   getAllPaymentRecords,
   createPaymentRecord,
@@ -11,10 +11,21 @@ import { requireRole } from "../middlewares/requireRole.js";
 
 const router = Router();
 
-// Public endpoint (parents submit payment)
-router.post("/", createPaymentRecord);
+// ── Multer Config (Memory Storage for sharp) ─────────────────
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit before compression
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    cb(allowed.includes(file.mimetype) ? null : new Error("Only JPG, PNG, WEBP allowed"), true);
+  },
+});
 
-// Admin only endpoints
+// Public endpoint: parents submit payment (with optional image evidence)
+router.post("/", upload.single("evidenceImage"), createPaymentRecord);
+
+// Admin endpoints (unchanged)
 router.get("/", requireAuth, requireRole("admin"), getAllPaymentRecords);
 router.get("/:id", requireAuth, requireRole("admin"), getPaymentRecordById);
 router.put("/:id", requireAuth, requireRole("admin"), updatePaymentRecordById);
