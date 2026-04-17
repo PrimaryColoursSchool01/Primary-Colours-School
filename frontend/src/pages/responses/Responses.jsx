@@ -12,6 +12,9 @@ import {
   Image as ImageIcon,
   FileText,
   Receipt,
+  Loader2,
+  Database,
+  RefreshCw,
 } from "lucide-react";
 import { getAllPaymentRecords, acceptPaymentItems, rejectPaymentRecord } from "@/services/payment-record.service";
 import { Button } from "@/components/ui/button";
@@ -26,7 +29,9 @@ import autoTable from "jspdf-autotable";
 
 export default function Responses() {
   const [paymentRecords, setPaymentRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Initial full-page load
+  const [isRefetching, setIsRefetching] = useState(false); // Search/filter refetch
+  const [loadingStage, setLoadingStage] = useState("initializing");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -45,9 +50,17 @@ export default function Responses() {
 
   const hasActiveFilters = search.trim() !== "" || status !== "all" || startDate !== "" || endDate !== "";
 
-  const fetchPaymentRecords = async () => {
-    setLoading(true);
+  const fetchPaymentRecords = async (isRefetch = false) => {
     try {
+      if (isRefetch) {
+        setIsRefetching(true);
+      } else {
+        setLoading(true);
+        setLoadingStage("connecting");
+      }
+
+      // Stage 2: Fetching
+      if (!isRefetch) setLoadingStage("fetching");
       const params = { page, limit: 10 };
       if (search) params.search = search;
       if (status !== "all") params.status = status;
@@ -55,27 +68,50 @@ export default function Responses() {
       if (endDate) params.endDate = endDate;
 
       const response = await getAllPaymentRecords(params);
+
+      // Stage 3: Processing
+      if (!isRefetch) setLoadingStage("processing");
       setPaymentRecords(response.paymentRecords);
       setTotal(response.total);
       setTotalPages(response.totalPages);
+
+      // Stage 4: Ready
+      if (!isRefetch) {
+        setLoadingStage("ready");
+        toast.success("Payment records loaded");
+      }
     } catch (error) {
+      console.error("Failed to load payment records:", error);
       toast.error("Failed to load payment records");
-      console.error(error);
     } finally {
-      setLoading(false);
+      if (isRefetch) {
+        setIsRefetching(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchPaymentRecords();
+    fetchPaymentRecords(false); // Initial load
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      // Only refetch after initial load
+      fetchPaymentRecords(true);
+    }
   }, [page, status, startDate, endDate]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      fetchPaymentRecords();
-    }, 500);
-    return () => clearTimeout(timer);
+    if (!loading) {
+      // Only refetch after initial load
+      const timer = setTimeout(() => {
+        setPage(1);
+        fetchPaymentRecords(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
   }, [search]);
 
   const handleViewDetails = (record) => {
@@ -101,7 +137,7 @@ export default function Responses() {
       await acceptPaymentItems(selectedRecord._id, selectedItemIds);
       toast.success("Items accepted successfully");
       setDetailModalOpen(false);
-      fetchPaymentRecords();
+      fetchPaymentRecords(true);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to accept items");
     }
@@ -117,7 +153,7 @@ export default function Responses() {
       toast.success("Payment record rejected");
       setRejectModalOpen(false);
       setDetailModalOpen(false);
-      fetchPaymentRecords();
+      fetchPaymentRecords(true);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to reject");
     }
@@ -175,7 +211,7 @@ export default function Responses() {
         binary += String.fromCharCode(bytes[i]);
       }
       const base64 = btoa(binary);
-      return `data:${record.paymentEvidenceContentType};base64,${base64}`;
+      return `${record.paymentEvidenceContentType};base64,${base64}`;
     } catch {
       return null;
     }
@@ -599,34 +635,99 @@ export default function Responses() {
     toast.success("PDF exported successfully");
   };
 
-  const EmptyState = () => (
-    <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
-      {hasActiveFilters ? (
-        <>
-          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <FilterX size={18} className="text-slate-400" />
+  // ── Full-Page Loading State (Initial Load Only) ────────────────────────
+  function ResponsesLoading({ stage }) {
+    const messages = {
+      initializing: "Initializing payment records...",
+      connecting: "Connecting to server...",
+      fetching: "Fetching payment records...",
+      processing: "Processing records...",
+      ready: "Finalizing...",
+    };
+
+    const progress = {
+      initializing: 10,
+      connecting: 25,
+      fetching: 50,
+      processing: 80,
+      ready: 100,
+    };
+
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 p-8">
+        {/* Animated loader with database icon */}
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-[#136dec] rounded-full animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Database className="w-6 h-6 text-[#136dec] animate-pulse" />
           </div>
-          <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No records match your filters</p>
-            <p className="text-xs text-slate-400 mt-0.5">Try adjusting your search or date range</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleClearAllFilters} className="text-xs h-8 mt-1">
-            Clear all filters
-          </Button>
-        </>
-      ) : (
-        <>
-          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <Eye size={18} className="text-slate-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No payment records yet</p>
-            <p className="text-xs text-slate-400 mt-0.5">Submitted payments will appear here</p>
-          </div>
-        </>
-      )}
-    </div>
-  );
+        </div>
+
+        {/* Meaningful message with motion */}
+        <div className="text-center space-y-2">
+          <p className="text-sm font-semibold text-slate-700 animate-pulse">{messages[stage] || "Loading payment records..."}</p>
+          <p className="text-xs text-slate-400">Please wait while we fetch your payment data</p>
+        </div>
+
+        {/* Progress indicator */}
+        <div className="w-48 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#136dec] rounded-full transition-all duration-500 ease-out"
+            style={{
+              width: `${progress[stage] || 0}%`,
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Inline Loading Indicator (For Search/Filter Refetches) ───────────
+  function InlineLoading() {
+    return (
+      <div className="flex items-center justify-center gap-2 py-8 text-slate-500">
+        <Loader2 className="w-4 h-4 animate-spin text-[#136dec]" />
+        <span className="text-sm font-medium">Updating records...</span>
+      </div>
+    );
+  }
+
+  // ── Empty State ───────────────────────────────────────────────────────────
+  function EmptyState() {
+    return (
+      <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
+        {hasActiveFilters ? (
+          <>
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <FilterX size={18} className="text-slate-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No records match your filters</p>
+              <p className="text-xs text-slate-400 mt-0.5">Try adjusting your search or date range</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleClearAllFilters} className="text-xs h-8 mt-1">
+              Clear all filters
+            </Button>
+          </>
+        ) : (
+          <>
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <Eye size={18} className="text-slate-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No payment records yet</p>
+              <p className="text-xs text-slate-400 mt-0.5">Submitted payments will appear here</p>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Show full-page loading only on initial load
+  if (loading) {
+    return <ResponsesLoading stage={loadingStage} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-3 sm:p-4 md:p-6">
@@ -637,17 +738,16 @@ export default function Responses() {
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Payment Responses</h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Review and accept parent payment submissions</p>
           </div>
-          {!loading && paymentRecords.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportPDF}
-              className="h-9 px-3 text-xs sm:text-sm border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              <Download size={14} className="mr-1.5" />
-              Export PDF
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            disabled={paymentRecords.length === 0 || isRefetching}
+            className="h-9 px-3 text-xs sm:text-sm border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+          >
+            <Download size={14} className="mr-1.5" />
+            Export PDF
+          </Button>
         </div>
 
         {/* Filters */}
@@ -660,6 +760,7 @@ export default function Responses() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 w-full text-xs sm:text-sm"
+                disabled={isRefetching}
               />
             </div>
             <Select
@@ -668,6 +769,7 @@ export default function Responses() {
                 setStatus(v);
                 setPage(1);
               }}
+              disabled={isRefetching}
             >
               <SelectTrigger className="w-full sm:w-[140px] text-xs sm:text-sm">
                 <SelectValue placeholder="Status" />
@@ -694,6 +796,7 @@ export default function Responses() {
                     setPage(1);
                   }}
                   className="pl-9 w-full text-xs sm:text-sm"
+                  disabled={isRefetching}
                 />
               </div>
               <span className="text-xs text-slate-400 shrink-0 hidden sm:inline">to</span>
@@ -708,6 +811,7 @@ export default function Responses() {
                     setPage(1);
                   }}
                   className="pl-9 w-full text-xs sm:text-sm"
+                  disabled={isRefetching}
                 />
               </div>
             </div>
@@ -715,7 +819,8 @@ export default function Responses() {
               <button
                 type="button"
                 onClick={handleClearDates}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 whitespace-nowrap underline underline-offset-2 w-full sm:w-auto text-left sm:text-right"
+                disabled={isRefetching}
+                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 whitespace-nowrap underline underline-offset-2 w-full sm:w-auto text-left sm:text-right disabled:opacity-50"
               >
                 Clear dates
               </button>
@@ -725,8 +830,8 @@ export default function Responses() {
 
         {/* Mobile / Tablet Card List */}
         <div className="lg:hidden space-y-3">
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-xs sm:text-sm">Loading payment records...</div>
+          {isRefetching ? (
+            <InlineLoading />
           ) : paymentRecords.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
               <EmptyState />
@@ -775,6 +880,7 @@ export default function Responses() {
                   size="sm"
                   onClick={() => handleViewDetails(record)}
                   className="w-full text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 text-xs sm:text-sm h-9"
+                  disabled={isRefetching}
                 >
                   <Eye size={14} className="mr-2" />
                   View Details
@@ -801,10 +907,10 @@ export default function Responses() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {isRefetching ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-10 text-slate-400 text-sm">
-                      Loading payment records...
+                    <TableCell colSpan={8} className="py-12">
+                      <InlineLoading />
                     </TableCell>
                   </TableRow>
                 ) : paymentRecords.length === 0 ? (
@@ -835,6 +941,7 @@ export default function Responses() {
                           size="sm"
                           onClick={() => handleViewDetails(record)}
                           className="text-blue-600 hover:text-blue-700 text-sm whitespace-nowrap"
+                          disabled={isRefetching}
                         >
                           <Eye size={14} className="mr-1" />
                           View
@@ -857,7 +964,7 @@ export default function Responses() {
             <div className="flex gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
-                disabled={page === 1}
+                disabled={page === 1 || isRefetching}
                 onClick={() => setPage(page - 1)}
                 className="flex-1 sm:flex-none text-xs sm:text-sm h-9"
               >
@@ -865,7 +972,7 @@ export default function Responses() {
               </Button>
               <Button
                 variant="outline"
-                disabled={page >= totalPages}
+                disabled={page >= totalPages || isRefetching}
                 onClick={() => setPage(page + 1)}
                 className="flex-1 sm:flex-none text-xs sm:text-sm h-9"
               >
@@ -1103,6 +1210,19 @@ export default function Responses() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 border-t border-slate-200">
+        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          © {new Date().getFullYear()} Findora · Primary Colours Schools
+        </p>
+        <div className="flex gap-4 sm:gap-5">
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">Privacy Policy</p>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            System Status: <span className="text-emerald-500">Normal</span>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

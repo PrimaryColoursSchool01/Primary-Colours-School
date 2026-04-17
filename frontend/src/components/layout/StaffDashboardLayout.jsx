@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Package, Clock, User, LogOut, Menu, X, Bell } from "lucide-react";
+import { LayoutDashboard, Package, Clock, User, LogOut, Menu, X, Bell, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/store";
 import { logout } from "@/services/auth.service";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ const staffNavGroups = [
 
 // ─── Sidebar content ──────────────────────────────────────────────────────────
 
-function SidebarContent({ onClose, onLogout, user, initials }) {
+function SidebarContent({ onClose, onLogout, user, initials, isLoggingOut }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -41,7 +41,11 @@ function SidebarContent({ onClose, onLogout, user, initials }) {
             </div>
           </div>
           {onClose && (
-            <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-600 transition-colors p-1">
+            <button
+              onClick={onClose}
+              disabled={isLoggingOut}
+              className="lg:hidden text-slate-400 hover:text-slate-600 transition-colors p-1 disabled:opacity-40 disabled:pointer-events-none"
+            >
               <X size={18} />
             </button>
           )}
@@ -76,7 +80,7 @@ function SidebarContent({ onClose, onLogout, user, initials }) {
                         isActive
                           ? "bg-[#136dec] text-white shadow-md shadow-[#136dec]/25"
                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      }`
+                      } ${isLoggingOut ? "pointer-events-none opacity-50" : ""}`
                     }
                   >
                     {({ isActive }) => (
@@ -97,10 +101,20 @@ function SidebarContent({ onClose, onLogout, user, initials }) {
       <div className="px-3 py-4 border-t border-slate-200">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-all"
+          disabled={isLoggingOut}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-all disabled:opacity-50 disabled:pointer-events-none"
         >
-          <LogOut size={16} strokeWidth={2} />
-          <span>Logout</span>
+          {isLoggingOut ? (
+            <>
+              <Loader2 size={16} className="animate-spin" strokeWidth={2} />
+              <span>Logging out...</span>
+            </>
+          ) : (
+            <>
+              <LogOut size={16} strokeWidth={2} />
+              <span>Logout</span>
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -111,6 +125,7 @@ function SidebarContent({ onClose, onLogout, user, initials }) {
 
 export default function StaffDashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user, logout: clearAuth } = useAuthStore();
   const navigate = useNavigate();
 
@@ -124,14 +139,20 @@ export default function StaffDashboardLayout() {
     : "ST";
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
       await logout();
       clearAuth();
-    } catch {
-      // proceed even if API call fails
-    } finally {
-      navigate("/login");
       toast.success("Logged out successfully");
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      clearAuth();
+      navigate("/login");
+      toast.error("Session ended, but some cleanup failed.");
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -139,17 +160,26 @@ export default function StaffDashboardLayout() {
     <div className="flex h-dvh bg-[#f6f7f8] overflow-hidden">
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
       <aside className="hidden lg:flex w-60 bg-white border-r border-slate-200 flex-col flex-shrink-0 h-full custom-scrollbar">
-        <SidebarContent onLogout={handleLogout} user={user} initials={initials} />
+        <SidebarContent onLogout={handleLogout} user={user} initials={initials} isLoggingOut={isLoggingOut} />
       </aside>
 
       {/* ── Mobile Sidebar Drawer ────────────────────────────────────── */}
       {sidebarOpen && (
         <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
+          {/* Backdrop — disable click when logging out */}
+          <div
+            className={`fixed inset-0 z-40 lg:hidden transition-opacity ${isLoggingOut ? "pointer-events-none" : ""}`}
+            onClick={() => !isLoggingOut && setSidebarOpen(false)}
+          />
           {/* Drawer */}
           <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white lg:hidden flex flex-col shadow-2xl custom-scrollbar border-r border-slate-200">
-            <SidebarContent onClose={() => setSidebarOpen(false)} onLogout={handleLogout} user={user} initials={initials} />
+            <SidebarContent
+              onClose={() => setSidebarOpen(false)}
+              onLogout={handleLogout}
+              user={user}
+              initials={initials}
+              isLoggingOut={isLoggingOut}
+            />
           </div>
         </>
       )}
@@ -161,7 +191,8 @@ export default function StaffDashboardLayout() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+              disabled={isLoggingOut}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               <Menu size={20} />
             </button>
@@ -170,8 +201,11 @@ export default function StaffDashboardLayout() {
 
           {/* Right */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Notification bell */}
-            <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
+            {/* Notification bell — disabled during logout */}
+            <button
+              disabled={isLoggingOut}
+              className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            >
               <Bell size={18} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
             </button>

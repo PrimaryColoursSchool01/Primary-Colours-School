@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, MoreVertical, Edit2, Trash2, Folder, FolderOpen, AlertTriangle, X } from "lucide-react";
+import { Plus, Search, MoreVertical, Edit2, Trash2, Folder, FolderOpen, AlertTriangle, X, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -136,7 +136,8 @@ function DeleteConfirmationModal({ open, onOpenChange, sectionName, classCount, 
               </p>
               {classCount > 0 && (
                 <p className="text-xs text-amber-700">
-                  ⚠️ This will also delete {classCount} class{classCount > 1 ? "es" : ""} in this section.
+                  ⚠️ This will also delete {classCount} class
+                  {classCount > 1 ? "es" : ""} in this section.
                 </p>
               )}
             </div>
@@ -165,6 +166,56 @@ function DeleteConfirmationModal({ open, onOpenChange, sectionName, classCount, 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Enhanced Skeleton with Motion & Meaningful Message ──────────────────────
+
+function SectionsSkeleton() {
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
+      {/* Animated header skeleton */}
+      <div className="flex justify-between items-start">
+        <div className="space-y-2">
+          <div className="h-8 w-48 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded animate-pulse" />
+          <div className="h-4 w-72 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded animate-pulse" />
+        </div>
+        <div className="h-10 w-32 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded animate-pulse" />
+      </div>
+
+      {/* Animated search skeleton */}
+      <div className="h-10 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded-lg animate-pulse" />
+
+      {/* Animated table skeleton */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+              <div className="h-8 w-8 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded" />
+              <div className="flex-1 h-4 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded" />
+              <div className="h-4 w-24 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded hidden sm:block" />
+              <div className="h-4 w-32 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded hidden md:block" />
+              <div className="h-8 w-8 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Floating loading message with motion */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div className="flex items-center gap-3 px-4 py-3 bg-slate-900 text-white rounded-xl shadow-2xl shadow-slate-900/50">
+          <Loader2 className="w-4 h-4 animate-spin text-[#136dec]" />
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium">Loading academic sections</span>
+            <span className="flex gap-0.5">
+              <span className="w-1 h-1 bg-[#136dec] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1 h-1 bg-[#136dec] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1 h-1 bg-[#136dec] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -285,13 +336,11 @@ export default function Sections() {
     });
   };
 
-  // ─── Loading State ─────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return <SectionsSkeleton />;
   }
-
-  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -386,7 +435,8 @@ export default function Sections() {
                       </td>
                       <td className="px-4 sm:px-6 py-4 sm:py-5 text-slate-600 hidden sm:table-cell">
                         <span className="text-sm">
-                          {section.classCount} class{section.classCount !== 1 ? "es" : ""}
+                          {section.classCount} class
+                          {section.classCount !== 1 ? "es" : ""}
                         </span>
                       </td>
                       <td className="px-4 sm:px-6 py-4 sm:py-5 text-slate-600 hidden md:table-cell">
@@ -438,37 +488,5 @@ export default function Sections() {
         isDeleting={isDeleting}
       />
     </>
-  );
-}
-
-// ─── Skeleton Loader ─────────────────────────────────────────────────────────
-
-function SectionsSkeleton() {
-  return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
-      <div className="flex justify-between">
-        <div>
-          <div className="h-8 w-48 bg-slate-200 rounded mb-2" />
-          <div className="h-4 w-72 bg-slate-200 rounded" />
-        </div>
-        <div className="h-10 w-32 bg-slate-200 rounded" />
-      </div>
-
-      <div className="h-10 bg-slate-200 rounded-lg" />
-
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <div className="h-8 w-8 bg-slate-200 rounded" />
-              <div className="flex-1 h-4 bg-slate-200 rounded" />
-              <div className="h-4 w-24 bg-slate-200 rounded hidden sm:block" />
-              <div className="h-4 w-32 bg-slate-200 rounded hidden md:block" />
-              <div className="h-8 w-8 bg-slate-200 rounded" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }

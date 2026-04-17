@@ -353,10 +353,39 @@ export default function Classes() {
     );
   };
 
-  // ─── Loading State ─────────────────────────────────────────────────────────
+  // ─── Loading State with Meaningful Message & Motion ─────────────────────────
 
   if (loading) {
-    return <ClassesSkeleton />;
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 animate-in fade-in duration-500">
+        {/* Header with spinner and message */}
+        <div className="text-center sm:text-left space-y-2">
+          <div className="flex justify-center sm:justify-start items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#136dec] border-t-transparent" />
+            <p className="text-slate-500 font-medium">Loading classes...</p>
+          </div>
+          <p className="text-sm text-slate-400">Fetching your academic structure, please wait.</p>
+        </div>
+
+        {/* Animated skeleton cards */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+                <div className="h-10 w-10 bg-slate-200 rounded-lg" />
+                <div className="flex-1 h-4 bg-slate-200 rounded" />
+                <div className="h-6 w-24 bg-slate-200 rounded hidden sm:block" />
+                <div className="h-4 w-32 bg-slate-200 rounded hidden md:block" />
+                <div className="h-8 w-8 bg-slate-200 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Subtle footer note */}
+        <p className="text-center text-xs text-slate-400 animate-pulse">Preparing your dashboard...</p>
+      </div>
+    );
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -583,44 +612,5 @@ export default function Classes() {
         isDeleting={isDeleting}
       />
     </>
-  );
-}
-
-// ─── Skeleton Loader ─────────────────────────────────────────────────────────
-
-function ClassesSkeleton() {
-  return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
-      <div className="flex justify-between">
-        <div>
-          <div className="h-8 w-48 bg-slate-200 rounded mb-2" />
-          <div className="h-4 w-72 bg-slate-200 rounded" />
-        </div>
-        <div className="h-10 w-32 bg-slate-200 rounded" />
-      </div>
-
-      <div className="flex gap-3">
-        <div className="h-10 flex-1 max-w-md bg-slate-200 rounded-lg" />
-        <div className="hidden sm:flex gap-2">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-10 w-24 bg-slate-200 rounded-lg" />
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <div className="h-10 w-10 bg-slate-200 rounded-lg" />
-              <div className="flex-1 h-4 bg-slate-200 rounded" />
-              <div className="h-6 w-24 bg-slate-200 rounded hidden sm:block" />
-              <div className="h-4 w-32 bg-slate-200 rounded hidden md:block" />
-              <div className="h-8 w-8 bg-slate-200 rounded" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }

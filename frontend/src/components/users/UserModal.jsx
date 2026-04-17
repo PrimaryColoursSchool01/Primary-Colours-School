@@ -12,32 +12,45 @@ import { Badge } from "@/components/ui/badge";
 export default function UserModal({ open, onOpenChange, mode, user, roles, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState([]);
+  const isEdit = mode === "edit";
 
   const {
     register,
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      fullName: "",
+      email: "",
+      userType: "staff",
+      status: "active",
+    },
+  });
 
-  const isEdit = mode === "edit";
-
+  // Reset form when modal opens/closes or user changes
   useEffect(() => {
-    if (isEdit && user) {
-      setValue("fullName", user.fullName);
-      setValue("email", user.email);
-      setValue("userType", user.userType);
-      setValue("status", user.status);
-      setSelectedRoles(user.roles?.map((r) => r._id) || []);
-    } else {
-      setValue("userType", "staff");
-      setValue("status", "active");
-      setSelectedRoles([]);
+    if (open) {
+      if (isEdit && user) {
+        setValue("fullName", user.fullName || "");
+        setValue("email", user.email || "");
+        setValue("userType", user.userType || "staff");
+        setValue("status", user.status || "active");
+        setSelectedRoles(user.roles?.map((r) => r._id) || []);
+      } else {
+        reset();
+        setValue("userType", "staff");
+        setValue("status", "active");
+        setSelectedRoles([]);
+      }
     }
-  }, [user, isEdit, setValue]);
+  }, [open, user, isEdit, setValue, reset]);
 
   const onSubmit = async (data) => {
+    console.log("🔵 Form submitted", { mode, userId: user?._id, data, selectedRoles });
+
     if (selectedRoles.length === 0) {
       toast.error("Please select at least one role");
       return;
@@ -48,6 +61,9 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
       const payload = { ...data, roleIds: selectedRoles };
 
       if (isEdit) {
+        if (!user?._id) {
+          throw new Error("User ID is missing");
+        }
         await updateUser(user._id, payload);
         toast.success("User updated successfully");
       } else {
@@ -57,8 +73,8 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
 
       onSuccess();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Operation failed");
-      console.error(error);
+      console.error("❌ Update failed:", error);
+      toast.error(error.response?.data?.message || error.message || "Operation failed");
     } finally {
       setLoading(false);
     }

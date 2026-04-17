@@ -14,6 +14,53 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// ─── Loading Component with Meaningful Message & Motion ──────────────────────
+function UsersLoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-3 sm:p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4 md:space-y-6 animate-in fade-in duration-500">
+        {/* Header area with spinner */}
+        <div className="text-center sm:text-left space-y-2">
+          <div className="flex justify-center sm:justify-start items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            <p className="text-slate-500 dark:text-slate-400 font-medium">Loading users...</p>
+          </div>
+          <p className="text-sm text-slate-400 dark:text-slate-500">Fetching account information, please wait.</p>
+        </div>
+
+        {/* Skeleton for filters */}
+        <div className="space-y-3">
+          <div className="h-10 w-full bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-10 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+            <div className="h-10 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+          </div>
+        </div>
+
+        {/* Skeleton table rows */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="p-4 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+                <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
+                  <div className="h-3 w-48 bg-slate-200 dark:bg-slate-800 rounded" />
+                </div>
+                <div className="h-6 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-8 w-8 bg-slate-200 dark:bg-slate-800 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer note */}
+        <p className="text-center text-xs text-slate-400 dark:text-slate-500 animate-pulse">Preparing your user directory...</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Users() {
   const [allUsers, setAllUsers] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -127,9 +174,14 @@ export default function Users() {
     fetchUsers();
   };
 
+  // Show meaningful loading state while fetching data
+  if (loading) {
+    return <UsersLoadingSkeleton />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-3 sm:p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="max-w-7xl mx-auto space-y-3 sm:space-y-4 md:space-y-6 animate-in fade-in duration-500">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -183,7 +235,7 @@ export default function Users() {
         {/* Table */}
         <UsersTable
           users={paginatedUsers}
-          loading={loading}
+          loading={false} // loading is already handled by the outer skeleton, so table never sees a loading state
           onEdit={handleEditUser}
           onResetPassword={handleResetPassword}
           onDelete={handleDeleteUser}

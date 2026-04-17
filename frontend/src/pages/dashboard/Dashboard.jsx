@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   RefreshCw,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getDashboardData, getRecentResponses } from "@/services/dashboard.service";
@@ -35,16 +36,42 @@ const formatCompactCurrency = (amount, currency = "₦") => {
 
 const getStatusBadgeConfig = (status) => {
   const configs = {
-    accepted: { bg: "bg-emerald-50 text-emerald-700", border: "border-emerald-200", label: "Accepted" },
-    pending: { bg: "bg-amber-50 text-amber-700", border: "border-amber-200", label: "Pending" },
-    rejected: { bg: "bg-rose-50 text-rose-600", border: "border-rose-200", label: "Rejected" },
-    partially_accepted: { bg: "bg-orange-50 text-orange-700", border: "border-orange-200", label: "Partial" },
+    accepted: {
+      bg: "bg-emerald-50 text-emerald-700",
+      border: "border-emerald-200",
+      label: "Accepted",
+    },
+    pending: {
+      bg: "bg-amber-50 text-amber-700",
+      border: "border-amber-200",
+      label: "Pending",
+    },
+    rejected: {
+      bg: "bg-rose-50 text-rose-600",
+      border: "border-rose-200",
+      label: "Rejected",
+    },
+    partially_accepted: {
+      bg: "bg-orange-50 text-orange-700",
+      border: "border-orange-200",
+      label: "Partial",
+    },
   };
   return configs[status] || configs.pending;
 };
 
-const PAYMENT_MODE_COLORS = { bank: "#136dec", cash: "#22c55e", pos: "#f59e0b", other: "#64748b" };
-const PAYMENT_MODE_LABELS = { bank: "Bank Transfer", cash: "Cash", pos: "POS", other: "Other" };
+const PAYMENT_MODE_COLORS = {
+  bank: "#136dec",
+  cash: "#22c55e",
+  pos: "#f59e0b",
+  other: "#64748b",
+};
+const PAYMENT_MODE_LABELS = {
+  bank: "Bank Transfer",
+  cash: "Cash",
+  pos: "POS",
+  other: "Other",
+};
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -177,7 +204,9 @@ const handleExportPDF = (dashboardData) => {
   doc.text("Admin Dashboard Report", margin, 22);
   doc.setFontSize(7.5);
   setTextColorSafe({ r: 220, g: 235, b: 255 });
-  doc.text(`Generated: ${format(new Date(), "PPp")}`, pageW - margin, 15, { align: "right" });
+  doc.text(`Generated: ${format(new Date(), "PPp")}`, pageW - margin, 15, {
+    align: "right",
+  });
   doc.text(`Period: All Time`, pageW - margin, 21, { align: "right" });
   doc.setDrawColor(BLUE_LIGHT.r, BLUE_LIGHT.g, BLUE_LIGHT.b).setLineWidth(0.3);
   doc.line(0, 42, pageW, 42);
@@ -310,47 +339,107 @@ const handleExportPDF = (dashboardData) => {
     doc.setFontSize(6.5).setFont("helvetica", "normal");
     setTextColorSafe(SLATE_400);
     doc.text("Primary Colours School • Confidential", margin, pageH - 7);
-    doc.text(`Page ${i} of ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
+    doc.text(`Page ${i} of ${totalPages}`, pageW - margin, pageH - 7, {
+      align: "right",
+    });
   }
 
   doc.save(`AdminDashboard_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`);
   toast.success("Report downloaded successfully");
 };
 
-// ─── Skeleton Loader ────────────────────────────────────────────────────────
-function DashboardSkeleton() {
+// ─── Enhanced Loading State with Meaningful Messages ────────────────────────
+function DashboardLoading({ stage }) {
+  const messages = {
+    initializing: "Connecting to server...",
+    financial: "Fetching financial data...",
+    charts: "Loading analytics...",
+    pipeline: "Fetching fulfillment data...",
+    responses: "Loading recent responses...",
+    finalizing: "Preparing dashboard...",
+  };
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8">
-      <div className="flex justify-between">
-        <div>
-          <div className="h-8 w-48 bg-slate-200 rounded mb-2" />
-          <div className="h-4 w-72 bg-slate-200 rounded" />
+    <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 p-8">
+      {/* Animated loader */}
+      <div className="relative">
+        <div className="w-16 h-16 border-4 border-slate-200 border-t-[#136dec] rounded-full animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Database className="w-6 h-6 text-[#136dec] animate-pulse" />
         </div>
-        <div className="h-9 w-32 bg-slate-200 rounded" />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-28 bg-slate-200 rounded-xl" />
-        ))}
+
+      {/* Meaningful message with motion */}
+      <div className="text-center space-y-2">
+        <p className="text-sm font-semibold text-slate-700 animate-pulse">{messages[stage] || "Loading dashboard..."}</p>
+        <p className="text-xs text-slate-400">Please wait while we fetch your data</p>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-        <div className="h-72 lg:col-span-2 bg-slate-200 rounded-xl" />
-        <div className="h-72 bg-slate-200 rounded-xl" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-        <div className="h-64 bg-slate-200 rounded-xl" />
-        <div className="h-64 lg:col-span-2 bg-slate-200 rounded-xl" />
+
+      {/* Progress indicator */}
+      <div className="w-48 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-[#136dec] rounded-full transition-all duration-500 ease-out"
+          style={{
+            width: `${
+              {
+                initializing: 10,
+                financial: 30,
+                charts: 50,
+                pipeline: 70,
+                responses: 90,
+                finalizing: 100,
+              }[stage] || 0
+            }%`,
+          }}
+        />
       </div>
     </div>
   );
 }
 
 // ─── Empty State ───────────────────────────────────────────────────────────
-function EmptyState({ message }) {
+function EmptyState({ message, onRetry }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-      <Package size={32} className="mb-2 opacity-50" />
-      <p className="text-xs font-medium">{message}</p>
+    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-8">
+      <Package size={32} className="mb-3 opacity-50" />
+      <p className="text-sm font-medium text-center mb-4">{message}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-[#136dec] bg-[#136dec]/10 rounded-lg hover:bg-[#136dec]/20 transition-colors"
+        >
+          <RefreshCw size={12} />
+          Try Again
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Error State with Retry ────────────────────────────────────────────────
+function DashboardError({ error, onRetry }) {
+  return (
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-md mx-auto">
+        <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3 animate-pulse" />
+        <h3 className="text-lg font-bold text-red-700 mb-1">Failed to load dashboard</h3>
+        <p className="text-sm text-red-600 mb-4">{error}</p>
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={onRetry}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            Retry
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -358,7 +447,7 @@ function EmptyState({ message }) {
 // ─── Main Dashboard Component ──────────────────────────────────────────────
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
-  const [useMockData, setUseMockData] = useState(false);
+  const [loadingStage, setLoadingStage] = useState("initializing");
   const [dashboardData, setDashboardData] = useState(null);
   const [recentResponses, setRecentResponses] = useState([]);
   const [error, setError] = useState(null);
@@ -367,96 +456,35 @@ export default function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      if (useMockData) {
-        await new Promise((r) => setTimeout(r, 800));
-        setDashboardData({
-          stats: {
-            total: 1284,
-            pending: 38,
-            partially_accepted: 45,
-            accepted: 1196,
-            rejected: 50,
-            totalRevenue: 12400000,
-            pendingRevenue: 2400000,
-          },
-          monthlySubmissions: [
-            { month: "Apr", count: 142 },
-            { month: "May", count: 188 },
-            { month: "Jun", count: 165 },
-            { month: "Jul", count: 256 },
-            { month: "Aug", count: 210 },
-            { month: "Sep", count: 289 },
-            { month: "Oct", count: 240 },
-            { month: "Nov", count: 312 },
-            { month: "Dec", count: 195 },
-            { month: "Jan", count: 278 },
-            { month: "Feb", count: 230 },
-            { month: "Mar", count: 5 },
-          ],
-          revenueBreakdown: [
-            { name: "Tuition Fees", value: 70, totalAmount: 8680000, count: 290, color: "#136dec" },
-            { name: "Exam Fees", value: 16, totalAmount: 1984000, count: 90, color: "#fbbf24" },
-            { name: "Sports/Clubs", value: 8, totalAmount: 992000, count: 50, color: "#10b981" },
-            { name: "Others", value: 6, totalAmount: 744000, count: 20, color: "#6366f1" },
-          ],
-          pipelineStatus: [
-            { stage: "Awaiting Handover", count: 156, description: "Staff yet to distribute", percentage: 12, color: "#f59e0b" },
-            { stage: "Fully Collected", count: 1090, description: "Student received item", percentage: 88, color: "#10b981" },
-          ],
-        });
-        setRecentResponses([
-          {
-            _id: "1",
-            nameOfChild: "Chukwudi Okafor",
-            classId: { name: "JSS 1" },
-            nameOfPayerOrCompany: "Mr. Emeka Okafor",
-            totalAmount: 145000,
-            status: "partially_accepted",
-            createdAt: "2023-10-24T10:00:00.000Z",
-          },
-          {
-            _id: "2",
-            nameOfChild: "Amina Bello",
-            classId: { name: "Primary 4" },
-            nameOfPayerOrCompany: "Mrs. Bello",
-            totalAmount: 82500,
-            status: "pending",
-            createdAt: "2023-10-24T10:00:00.000Z",
-          },
-          {
-            _id: "3",
-            nameOfChild: "Tunde Adeyemi",
-            classId: { name: "JSS 3" },
-            nameOfPayerOrCompany: "Tunde Adeyemi Sr.",
-            totalAmount: 120000,
-            status: "accepted",
-            createdAt: "2023-10-23T10:00:00.000Z",
-          },
-          {
-            _id: "4",
-            nameOfChild: "Nneka Nwosu",
-            classId: { name: "Primary 2" },
-            nameOfPayerOrCompany: "Chief Nwosu",
-            totalAmount: 75000,
-            status: "rejected",
-            createdAt: "2023-10-23T10:00:00.000Z",
-          },
-        ]);
-        toast.success("Mock data loaded");
-      } else {
-        const [dashboard, recent] = await Promise.all([getDashboardData(), getRecentResponses(1, 10)]);
-        setDashboardData(dashboard.data);
-        setRecentResponses(recent.data?.recentResponses || []);
-        toast.success("Dashboard data loaded");
-      }
+
+      // Stage 1: Financial data
+      setLoadingStage("financial");
+      const dashboard = await getDashboardData();
+
+      // Stage 2: Charts & analytics
+      setLoadingStage("charts");
+
+      // Stage 3: Pipeline data
+      setLoadingStage("pipeline");
+
+      // Stage 4: Recent responses
+      setLoadingStage("responses");
+      const recent = await getRecentResponses(1, 10);
+
+      // Stage 5: Finalize
+      setLoadingStage("finalizing");
+
+      setDashboardData(dashboard.data);
+      setRecentResponses(recent.data?.recentResponses || []);
+      toast.success("Dashboard loaded successfully");
     } catch (err) {
       console.error("Failed to load dashboard:", err);
-      setError(err.message || "Failed to load dashboard data");
-      toast.error("Could not load dashboard");
+      setError(err.message || "Failed to connect to server. Please check your connection.");
+      toast.error("Could not load dashboard data");
     } finally {
       setLoading(false);
     }
-  }, [useMockData]);
+  }, []);
 
   useEffect(() => {
     loadDashboardData();
@@ -464,38 +492,38 @@ export default function Dashboard() {
 
   const monthlySubmissions = useMemo(
     () =>
-      useMockData
-        ? dashboardData?.monthlySubmissions || []
-        : dashboardData?.monthlySubmissions?.map((item) => ({ month: item.month, count: item.count })) || [],
-    [dashboardData, useMockData],
+      dashboardData?.monthlySubmissions?.map((item) => ({
+        month: item.month,
+        count: item.count,
+      })) || [],
+    [dashboardData],
   );
+
   const revenueBreakdown = useMemo(
     () =>
-      useMockData
-        ? dashboardData?.revenueBreakdown || []
-        : dashboardData?.revenueBreakdown?.map((item) => ({
-            name: item.name,
-            value: item.value,
-            totalAmount: item.totalAmount,
-            count: item.count,
-            color: item.color || "#64748b",
-          })) || [],
-    [dashboardData, useMockData],
+      dashboardData?.revenueBreakdown?.map((item) => ({
+        name: item.name,
+        value: item.value,
+        totalAmount: item.totalAmount,
+        count: item.count,
+        color: item.color || "#64748b",
+      })) || [],
+    [dashboardData],
   );
+
   const pipelineStatus = useMemo(
     () =>
-      useMockData
-        ? dashboardData?.pipelineStatus || []
-        : dashboardData?.pipelineStatus?.map((item) => ({
-            stage: item.stage,
-            count: item.count,
-            description: item.description,
-            percentage: item.percentage,
-            color: item.color,
-            icon: item.icon || Clock,
-          })) || [],
-    [dashboardData, useMockData],
+      dashboardData?.pipelineStatus?.map((item) => ({
+        stage: item.stage,
+        count: item.count,
+        description: item.description,
+        percentage: item.percentage,
+        color: item.color,
+        icon: item.icon || Clock,
+      })) || [],
+    [dashboardData],
   );
+
   const stats = dashboardData?.stats || {
     total: 0,
     pending: 0,
@@ -554,25 +582,14 @@ export default function Dashboard() {
     },
   ];
 
-  const displayResponses = recentResponses.length > 0 ? recentResponses : useMockData ? [] : [];
+  // Show loading state with meaningful messages
+  if (loading) {
+    return <DashboardLoading stage={loadingStage} />;
+  }
 
-  if (loading) return <DashboardSkeleton />;
+  // Show error state
   if (error) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-          <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-red-700 mb-1">Failed to load dashboard</h3>
-          <p className="text-sm text-red-600 mb-4">{error}</p>
-          <button
-            onClick={loadDashboardData}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
+    return <DashboardError error={error} onRetry={loadDashboardData} />;
   }
 
   return (
@@ -648,7 +665,7 @@ export default function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <EmptyState message="No submission data available" />
+              <EmptyState message="No submission data available" onRetry={loadDashboardData} />
             )}
           </div>
         </div>
@@ -707,7 +724,7 @@ export default function Dashboard() {
                 </div>
               </>
             ) : (
-              <EmptyState message="No revenue data available" />
+              <EmptyState message="No revenue data available" onRetry={loadDashboardData} />
             )}
           </div>
           {revenueBreakdown.length > 0 && (
@@ -741,7 +758,7 @@ export default function Dashboard() {
             {pipelineStatus.length > 0 ? (
               pipelineStatus.map((stage) => <PipelineStage key={stage.stage} stage={stage} />)
             ) : (
-              <EmptyState message="No pipeline data available" />
+              <EmptyState message="No pipeline data available" onRetry={loadDashboardData} />
             )}
           </div>
         </div>
@@ -758,8 +775,8 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="md:hidden divide-y divide-slate-100">
-            {displayResponses.length > 0 ? (
-              displayResponses.map((row) => (
+            {recentResponses.length > 0 ? (
+              recentResponses.map((row) => (
                 <div key={row._id} className="px-4 py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-900 truncate">{row.nameOfChild}</p>
@@ -790,8 +807,8 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {displayResponses.length > 0 ? (
-                  displayResponses.map((row) => (
+                {recentResponses.length > 0 ? (
+                  recentResponses.map((row) => (
                     <tr key={row._id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-5 py-3.5">
                         <span className="text-sm font-bold text-slate-900 whitespace-nowrap">{row.nameOfChild}</span>
@@ -828,41 +845,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Data Source Toggle ────────────────────────────────────────────── */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <div className="bg-slate-900 text-white rounded-xl shadow-2xl shadow-slate-900/50 p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div
-                className={`p-2 rounded-lg transition-colors ${useMockData ? "bg-amber-500/20 text-amber-400" : "bg-slate-700 text-slate-400"}`}
-              >
-                <Database size={16} />
-              </div>
-              <div
-                className={`p-2 rounded-lg transition-colors ${!useMockData ? "bg-[#136dec]/20 text-[#136dec]" : "bg-slate-700 text-slate-400"}`}
-              >
-                <Cloud size={16} />
-              </div>
-            </div>
-            <div className="h-8 w-px bg-slate-700" />
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Source</span>
-              <span className="text-xs font-semibold">{useMockData ? "Mock Data" : "Live API"}</span>
-            </div>
-            <button
-              onClick={() => setUseMockData(!useMockData)}
-              className={`relative w-12 h-6 rounded-full transition-colors ${useMockData ? "bg-amber-500" : "bg-[#136dec]"}`}
-            >
-              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${useMockData ? "left-1" : "left-7"}`} />
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 border-t border-slate-200">
         <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          © 2025 Findora · Primary Colours Schools
+          © {new Date().getFullYear()} Findora · Primary Colours Schools
         </p>
         <div className="flex gap-4 sm:gap-5">
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">Privacy Policy</p>

@@ -171,6 +171,64 @@ function DeleteConfirmationModal({ open, onOpenChange, itemName, onConfirm, isDe
   );
 }
 
+// ─── Enhanced Skeleton Loader with Meaningful Message & Motion ──────────────
+
+function ItemsSkeleton() {
+  return (
+    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 animate-in fade-in duration-500">
+      {/* Header with spinner and message */}
+      <div className="text-center sm:text-left space-y-2">
+        <div className="flex justify-center sm:justify-start items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#136dec] border-t-transparent" />
+          <p className="text-slate-500 font-medium">Loading fee items...</p>
+        </div>
+        <p className="text-sm text-slate-400">Fetching fee structures and configurations, please wait.</p>
+      </div>
+
+      {/* Skeleton for action buttons and search */}
+      <div className="flex justify-between items-start gap-3">
+        <div className="flex-1">
+          <div className="h-6 w-48 bg-slate-200 rounded mb-2 animate-pulse" />
+          <div className="h-4 w-72 bg-slate-200 rounded animate-pulse" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-9 w-24 bg-slate-200 rounded animate-pulse" />
+          <div className="h-9 w-28 bg-slate-200 rounded animate-pulse" />
+        </div>
+      </div>
+
+      {/* Search bar skeleton */}
+      <div className="h-9 bg-slate-200 rounded-lg animate-pulse" />
+
+      {/* Tabs skeleton */}
+      <div className="flex gap-4 mb-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-10 w-24 bg-slate-200 rounded animate-pulse" />
+        ))}
+      </div>
+
+      {/* Table rows skeleton with stagger */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-32 bg-slate-200 rounded" />
+                <div className="h-3 w-48 bg-slate-200 rounded" />
+              </div>
+              <div className="h-6 w-20 bg-slate-200 rounded" />
+              <div className="h-8 w-8 bg-slate-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Subtle footer note */}
+      <p className="text-center text-xs text-slate-400 animate-pulse">Preparing your fee items dashboard...</p>
+    </div>
+  );
+}
+
 // ─── Items ────────────────────────────────────────────────────────────────────
 
 export default function Items() {
@@ -467,8 +525,7 @@ export default function Items() {
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // ─── Loading State ─────────────────────────────────────────────────────────
-
+  // Show meaningful loading state while fetching data
   if (loading) {
     return <ItemsSkeleton />;
   }
@@ -477,7 +534,7 @@ export default function Items() {
 
   return (
     <>
-      <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 animate-in fade-in duration-500">
         {/* ── Page header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -762,39 +819,5 @@ export default function Items() {
         isDeleting={isDeleting}
       />
     </>
-  );
-}
-
-// ─── Skeleton Loader ──────────────────────────────────────────────────────────
-
-function ItemsSkeleton() {
-  return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
-      <div className="flex justify-between">
-        <div>
-          <div className="h-6 w-48 bg-slate-200 rounded mb-2" />
-          <div className="h-4 w-72 bg-slate-200 rounded" />
-        </div>
-        <div className="flex gap-2">
-          <div className="h-9 w-24 bg-slate-200 rounded" />
-          <div className="h-9 w-28 bg-slate-200 rounded" />
-        </div>
-      </div>
-
-      <div className="h-9 bg-slate-200 rounded-lg" />
-
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex gap-4 mb-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-10 w-24 bg-slate-200 rounded" />
-          ))}
-        </div>
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-slate-200 rounded" />
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }

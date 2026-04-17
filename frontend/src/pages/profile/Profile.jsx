@@ -18,6 +18,67 @@ const schema = z.object({
   phone: z.string().optional(),
 });
 
+// ─── Loading Skeleton with Meaningful Message & Motion ──────────────────────
+function ProfileLoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="max-w-2xl xl:max-w-3xl mx-auto px-3 py-4 sm:px-5 sm:py-6 md:px-6 md:py-8 space-y-4 sm:space-y-5 md:space-y-6 animate-in fade-in duration-500">
+        {/* Header with spinner */}
+        <div className="text-center sm:text-left space-y-2">
+          <div className="flex justify-center sm:justify-start items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#136dec] border-t-transparent" />
+            <p className="text-slate-500 font-medium">Loading profile...</p>
+          </div>
+          <p className="text-sm text-slate-400">Fetching your account information, please wait.</p>
+        </div>
+
+        {/* Account card skeleton */}
+        <Card className="shadow-sm">
+          <CardHeader className="px-4 py-4 sm:px-6 sm:py-5 pb-0">
+            <div className="h-5 w-32 bg-slate-200 rounded animate-pulse" />
+            <div className="h-3 w-48 bg-slate-200 rounded mt-1 animate-pulse" />
+          </CardHeader>
+          <CardContent className="px-4 py-4 sm:px-6 sm:py-5 space-y-4">
+            {/* Avatar + info skeleton */}
+            <div className="flex items-center gap-3 sm:gap-4 pb-4 border-b border-slate-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-200 animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-32 bg-slate-200 rounded animate-pulse" />
+                <div className="h-3 w-48 bg-slate-200 rounded animate-pulse" />
+                <div className="flex gap-2">
+                  <div className="h-5 w-16 bg-slate-200 rounded animate-pulse" />
+                  <div className="h-5 w-16 bg-slate-200 rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+            {/* Form fields skeleton */}
+            <div className="space-y-3">
+              <div className="h-9 w-full bg-slate-200 rounded animate-pulse" />
+              <div className="h-9 w-full bg-slate-200 rounded animate-pulse" />
+              <div className="h-9 w-full bg-slate-200 rounded animate-pulse" />
+              <div className="h-9 w-28 bg-slate-200 rounded animate-pulse" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Security card skeleton */}
+        <Card className="shadow-sm">
+          <CardHeader className="px-4 py-4 sm:px-6 sm:py-5 pb-0">
+            <div className="h-5 w-24 bg-slate-200 rounded animate-pulse" />
+            <div className="h-3 w-40 bg-slate-200 rounded mt-1 animate-pulse" />
+          </CardHeader>
+          <CardContent className="px-4 py-4 sm:px-6 sm:py-5 space-y-3">
+            <div className="h-16 w-full bg-slate-200 rounded animate-pulse" />
+            <div className="h-16 w-full bg-slate-200 rounded animate-pulse" />
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-xs text-slate-400 animate-pulse">Preparing your profile...</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -89,17 +150,14 @@ export default function Profile() {
       .toUpperCase()
       .slice(0, 2) || "U";
 
+  // Show meaningful loading state while fetching data
   if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#136dec]" size={28} />
-      </div>
-    );
+    return <ProfileLoadingSkeleton />;
   }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <div className="max-w-2xl xl:max-w-3xl mx-auto px-3 py-4 sm:px-5 sm:py-6 md:px-6 md:py-8 space-y-4 sm:space-y-5 md:space-y-6">
+      <div className="max-w-2xl xl:max-w-3xl mx-auto px-3 py-4 sm:px-5 sm:py-6 md:px-6 md:py-8 space-y-4 sm:space-y-5 md:space-y-6 animate-in fade-in duration-500">
         {/* ── Page Header ───────────────────────────────────────── */}
         <div>
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white leading-tight">Profile Settings</h1>
