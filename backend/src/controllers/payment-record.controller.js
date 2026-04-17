@@ -18,12 +18,30 @@ export const createPaymentRecord = async (req, res, next) => {
     term,
     session,
     items,
-    // ── Payment Evidence Fields ───────────────────────────────
-    paymentEvidenceType, // 'text' or 'image'
-    paymentEvidenceText, // Text reference (if type='text')
+    // ── Payment Evidence Fields (FLAT schema) ─────────────────
+    paymentEvidenceType,
+    paymentEvidenceText,
   } = req.body;
 
-  // ── Existing Validation (keep your current checks) ──────────
+  // ✅ FIX 1: Parse items if it's a JSON string (from FormData)
+  let parsedItems = items;
+  if (typeof items === "string") {
+    try {
+      parsedItems = JSON.parse(items);
+    } catch (e) {
+      const err = new Error("Invalid items format");
+      err.statusCode = 400;
+      return next(err);
+    }
+  }
+
+  // ✅ FIX 2: Ensure quantities are numbers (FormData sends strings)
+  parsedItems = parsedItems.map((item) => ({
+    ...item,
+    quantity: Number(item.quantity),
+  }));
+
+  // ── Existing Validation ─────────────────────────────────────
   if (!nameOfChild || !classId || !nameOfPayerOrCompany || !dateOfPayment || !modeOfPayment || !bankOrPaymentSourceName || !session) {
     const err = new Error("Missing required fields");
     err.statusCode = 400;
@@ -36,13 +54,13 @@ export const createPaymentRecord = async (req, res, next) => {
     return next(err);
   }
 
-  if (!items || !Array.isArray(items) || items.length === 0) {
+  if (!parsedItems || !Array.isArray(parsedItems) || parsedItems.length === 0) {
     const err = new Error("At least one item is required");
     err.statusCode = 400;
     return next(err);
   }
 
-  for (const item of items) {
+  for (const item of parsedItems) {
     if (!item.itemId || !item.quantity || item.quantity < 1) {
       const err = new Error("Each item must have a valid itemId and quantity");
       err.statusCode = 400;
@@ -50,7 +68,7 @@ export const createPaymentRecord = async (req, res, next) => {
     }
   }
 
-  // ── Payment Evidence Validation ─────────────────────────────
+  // ── Payment Evidence Validation (FLAT fields) ───────────────
   if (!paymentEvidenceType || !["text", "image"].includes(paymentEvidenceType)) {
     const err = new Error("Payment evidence type is required");
     err.statusCode = 400;
@@ -64,8 +82,8 @@ export const createPaymentRecord = async (req, res, next) => {
   }
 
   // ── Handle Image: Compress with sharp → Buffer ──────────────
-  let imageBuffer = null;
-  let contentType = null;
+  let paymentEvidenceImage = null;
+  let paymentEvidenceContentType = null;
 
   if (paymentEvidenceType === "image" && req.file) {
     try {
@@ -82,8 +100,8 @@ export const createPaymentRecord = async (req, res, next) => {
         return next(err);
       }
 
-      imageBuffer = compressed;
-      contentType = "image/jpeg";
+      paymentEvidenceImage = compressed;
+      paymentEvidenceContentType = "image/jpeg";
     } catch (error) {
       console.error("Sharp compression failed:", error);
       const err = new Error("Failed to process image. Please try a different photo.");
@@ -97,7 +115,7 @@ export const createPaymentRecord = async (req, res, next) => {
   }
 
   try {
-    // ── Existing Class/Item Validation (keep your current logic) ─
+    // ── Existing Class/Item Validation ─────────────────────────
     const existingClass = await Class.findById(classId);
     if (!existingClass) {
       const err = new Error("Class not found");
@@ -105,7 +123,7 @@ export const createPaymentRecord = async (req, res, next) => {
       return next(err);
     }
 
-    const itemIds = items.map((item) => item.itemId);
+    const itemIds = parsedItems.map((item) => item.itemId);
     const existingItems = await Item.find({ _id: { $in: itemIds } });
     if (existingItems.length !== itemIds.length) {
       const err = new Error("One or more items do not exist");
@@ -113,7 +131,7 @@ export const createPaymentRecord = async (req, res, next) => {
       return next(err);
     }
 
-    const itemsWithAmount = items.map((item) => {
+    const itemsWithAmount = parsedItems.map((item) => {
       const dbItem = existingItems.find((i) => i._id.toString() === item.itemId.toString());
       return {
         itemId: item.itemId,
@@ -125,19 +143,18 @@ export const createPaymentRecord = async (req, res, next) => {
 
     const totalAmount = itemsWithAmount.reduce((sum, item) => sum + item.quantity * item.amountAtPayment, 0);
 
-    // ── Build Payment Evidence Object ─────────────────────────
-    const paymentEvidence = {
-      type: paymentEvidenceType,
-      uploadedAt: new Date(),
+    // ── Build FLAT Payment Evidence Fields ────────────────────
+    // Match the flat schema fields exactly
+    const evidenceFields = {
+      paymentEvidenceType,
+      paymentEvidenceUploadedAt: new Date(),
     };
 
     if (paymentEvidenceType === "text") {
-      paymentEvidence.textReference = paymentEvidenceText.trim();
+      evidenceFields.paymentEvidenceText = paymentEvidenceText.trim();
     } else {
-      paymentEvidence.image = {
-        imageBuffer,
-        contentType,
-      };
+      evidenceFields.paymentEvidenceImage = paymentEvidenceImage;
+      evidenceFields.paymentEvidenceContentType = paymentEvidenceContentType;
     }
 
     // ── Create Payment Record ─────────────────────────────────
@@ -154,7 +171,7 @@ export const createPaymentRecord = async (req, res, next) => {
       items: itemsWithAmount,
       totalAmount,
       status: "pending",
-      paymentEvidence, // ← Add evidence
+      ...evidenceFields, // ← Spread flat evidence fields
     });
 
     return res.status(201).json({

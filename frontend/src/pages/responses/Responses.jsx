@@ -1,6 +1,18 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Search, Eye, CheckCircle, XCircle, AlertCircle, CalendarIcon, FilterX, Download } from "lucide-react";
+import {
+  Search,
+  Eye,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  CalendarIcon,
+  FilterX,
+  Download,
+  Image as ImageIcon,
+  FileText,
+  Receipt,
+} from "lucide-react";
 import { getAllPaymentRecords, acceptPaymentItems, rejectPaymentRecord } from "@/services/payment-record.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,6 +166,278 @@ export default function Responses() {
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
+  const getEvidenceImageSrc = (record) => {
+    if (record.paymentEvidenceType !== "image" || !record.paymentEvidenceImage?.data) return null;
+    try {
+      const bytes = new Uint8Array(record.paymentEvidenceImage.data);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      return `data:${record.paymentEvidenceContentType};base64,${base64}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // ── Thermal Receipt-style PDF ──────────────────────────────────
+  const generateReceiptPDF = (record) => {
+    const acceptedItems = record.items.filter((item) => item.status === "accepted");
+
+    // ── Dynamic page height based on item count ────────────────
+    const baseHeight = 155;
+    const perItemHeight = 10;
+    const pageHeight = baseHeight + acceptedItems.length * perItemHeight;
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [80, pageHeight],
+    });
+
+    const pageW = 80;
+    const margin = 5;
+
+    // ── Helpers ────────────────────────────────────────────────
+    // ✅ Use "NGN" — jsPDF default fonts don't support ₦
+    const formatCurrencyPDF = (amt) => {
+      const num = typeof amt === "number" ? amt : 0;
+      return `NGN ${num.toLocaleString("en-NG")}`;
+    };
+
+    const dashedLine = (y) => {
+      doc.setDrawColor(180, 180, 180).setLineWidth(0.2);
+      const dashW = 2;
+      const gapW = 1.2;
+      let x = margin;
+      while (x < pageW - margin) {
+        doc.line(x, y, Math.min(x + dashW, pageW - margin), y);
+        x += dashW + gapW;
+      }
+    };
+
+    const solidLine = (y, color = [200, 200, 200]) => {
+      doc
+        .setDrawColor(...color)
+        .setLineWidth(0.3)
+        .line(margin, y, pageW - margin, y);
+    };
+
+    // ── Colors ─────────────────────────────────────────────────
+    const BLACK = [15, 23, 42];
+    const GRAY = [100, 116, 139];
+    const LIGHT_GRAY = [203, 213, 225];
+    const PRIMARY = [19, 109, 236];
+    const WHITE = [255, 255, 255];
+
+    let y = 9;
+
+    // ── SCHOOL NAME ────────────────────────────────────────────
+    doc
+      .setFontSize(11)
+      .setFont("helvetica", "bold")
+      .setTextColor(...BLACK)
+      .text("PRIMARY COLOURS", pageW / 2, y, { align: "center" });
+    y += 5;
+    doc
+      .setFontSize(9)
+      .setFont("helvetica", "bold")
+      .setTextColor(...BLACK)
+      .text("SCHOOL", pageW / 2, y, { align: "center" });
+    y += 5;
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "normal")
+      .setTextColor(...GRAY)
+      .text("OFFICIAL PAYMENT RECEIPT", pageW / 2, y, { align: "center" });
+    y += 4;
+    doc
+      .setFontSize(6)
+      .setFont("helvetica", "normal")
+      .setTextColor(...GRAY)
+      .text(new Date().toLocaleString("en-NG"), pageW / 2, y, { align: "center" });
+    y += 4;
+
+    dashedLine(y);
+    y += 5;
+
+    // ── RECEIPT META ───────────────────────────────────────────
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...BLACK);
+    doc.text("RECEIPT NO:", margin, y);
+    doc
+      .setFont("helvetica", "normal")
+      .setTextColor(...GRAY)
+      .text(`#${record._id.slice(-8).toUpperCase()}`, pageW - margin, y, { align: "right" });
+    y += 4;
+    doc
+      .setFont("helvetica", "bold")
+      .setTextColor(...BLACK)
+      .text("PAYMENT DATE:", margin, y);
+    doc
+      .setFont("helvetica", "normal")
+      .setTextColor(...GRAY)
+      .text(new Date(record.dateOfPayment).toLocaleDateString("en-NG"), pageW - margin, y, { align: "right" });
+    y += 4;
+
+    dashedLine(y);
+    y += 5;
+
+    // ── BILL TO ────────────────────────────────────────────────
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...PRIMARY)
+      .text("BILL TO", margin, y);
+    y += 4;
+    doc.setFont("helvetica", "normal").setTextColor(...BLACK);
+    const infoRows = [
+      ["Child", record.nameOfChild],
+      ["Payer", record.nameOfPayerOrCompany],
+      ["Class", record.classId?.name || "N/A"],
+      ["Session", record.session],
+      ...(record.term ? [["Term", record.term]] : []),
+    ];
+    infoRows.forEach(([label, value]) => {
+      doc
+        .setFontSize(6.5)
+        .setFont("helvetica", "bold")
+        .setTextColor(...GRAY)
+        .text(`${label}:`, margin, y);
+      doc
+        .setFont("helvetica", "normal")
+        .setTextColor(...BLACK)
+        .text(String(value), pageW - margin, y, { align: "right" });
+      y += 4;
+    });
+
+    dashedLine(y);
+    y += 5;
+
+    // ── PAYMENT METHOD ─────────────────────────────────────────
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...PRIMARY)
+      .text("PAYMENT METHOD", margin, y);
+    y += 4;
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...GRAY)
+      .text("Mode:", margin, y);
+    doc
+      .setFont("helvetica", "normal")
+      .setTextColor(...BLACK)
+      .text(record.modeOfPayment.replace(/-/g, " "), pageW - margin, y, { align: "right" });
+    y += 4;
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...GRAY)
+      .text("Bank/Source:", margin, y);
+    doc
+      .setFont("helvetica", "normal")
+      .setTextColor(...BLACK)
+      .text(record.bankOrPaymentSourceName, pageW - margin, y, { align: "right" });
+    y += 4;
+
+    dashedLine(y);
+    y += 5;
+
+    // ── ITEMS HEADER ───────────────────────────────────────────
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...PRIMARY)
+      .text("ACCEPTED ITEMS", margin, y);
+    y += 4;
+
+    doc
+      .setFontSize(6)
+      .setFont("helvetica", "bold")
+      .setTextColor(...GRAY);
+    doc.text("DESCRIPTION", margin, y);
+    doc.text("QTY", pageW / 2 + 5, y, { align: "center" });
+    doc.text("AMOUNT", pageW - margin, y, { align: "right" });
+    y += 2;
+
+    solidLine(y);
+    y += 4;
+
+    // ── ITEMS ──────────────────────────────────────────────────
+    let subtotal = 0;
+    acceptedItems.forEach((item) => {
+      const itemName = item.itemId?.name || "Item";
+      const amount = item.quantity * item.amountAtPayment;
+      subtotal += amount;
+
+      const lines = doc.splitTextToSize(itemName, 38);
+      doc
+        .setFontSize(6.5)
+        .setFont("helvetica", "normal")
+        .setTextColor(...BLACK);
+      doc.text(lines, margin, y);
+      doc.text(`x${item.quantity}`, pageW / 2 + 5, y, { align: "center" });
+      doc.text(formatCurrencyPDF(amount), pageW - margin, y, { align: "right" });
+      y += lines.length * 4 + 1;
+    });
+
+    y += 2;
+    solidLine(y);
+    y += 5;
+
+    // ── TOTAL ──────────────────────────────────────────────────
+    doc.setFillColor(235, 244, 255);
+    doc.roundedRect(margin, y - 1.5, pageW - margin * 2, 10, 1, 1, "F");
+
+    doc
+      .setFontSize(8)
+      .setFont("helvetica", "bold")
+      .setTextColor(...PRIMARY)
+      .text("TOTAL PAID", margin + 3, y + 5);
+    doc
+      .setFontSize(8)
+      .setFont("helvetica", "bold")
+      .setTextColor(12, 85, 180)
+      .text(formatCurrencyPDF(subtotal), pageW - margin - 3, y + 5, { align: "right" });
+    y += 14;
+
+    dashedLine(y);
+    y += 6;
+
+    // ── FOOTER ─────────────────────────────────────────────────
+    doc
+      .setFontSize(6.5)
+      .setFont("helvetica", "bold")
+      .setTextColor(...BLACK)
+      .text("Thank you for your payment!", pageW / 2, y, {
+        align: "center",
+      });
+    y += 4;
+    doc
+      .setFontSize(6)
+      .setFont("helvetica", "normal")
+      .setTextColor(...GRAY)
+      .text("Please retain this receipt for your records.", pageW / 2, y, { align: "center" });
+    y += 4;
+    doc
+      .setFontSize(6)
+      .setFont("helvetica", "normal")
+      .setTextColor(...GRAY)
+      .text("Primary Colours School - Finance Dept.", pageW / 2, y, { align: "center" });
+
+    // ── SAVE ───────────────────────────────────────────────────
+    const safeName = record.nameOfChild.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    const safeClass = (record.classId?.name || "Class").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    const dateStr = new Date(record.dateOfPayment).toISOString().slice(0, 10);
+    doc.save(`Receipt_${safeName}_${safeClass}_${dateStr}.pdf`);
+    toast.success("Receipt downloaded successfully");
+  };
+
   const handleExportPDF = () => {
     if (!paymentRecords.length) {
       toast.error("No records to export");
@@ -166,7 +450,6 @@ export default function Responses() {
     const margin = 12;
     const contentW = pageW - margin * 2;
 
-    // ── Color Palette ─────────────────────────────────────────────────────
     const PRIMARY = [19, 109, 236];
     const PRIMARY_DARK = [12, 85, 180];
     const PRIMARY_LIGHT = [235, 244, 255];
@@ -181,16 +464,15 @@ export default function Responses() {
     const SLATE_50 = [248, 250, 252];
     const WHITE = [255, 255, 255];
 
-    // ── Helpers ───────────────────────────────────────────────────────────
     const filledRect = (x, y, w, h, r, color) => {
       doc.setFillColor(...color);
       doc.roundedRect(x, y, w, h, r, r, "F");
     };
 
-    // ✅ Use "NGN" instead of "₦" to avoid encoding issues in PDF
+    // ✅ Use "NGN" prefix here too
     const formatCurrencyPDF = (amt) => {
       const num = typeof amt === "number" ? amt : 0;
-      return `NGN ${num.toLocaleString()}`;
+      return `NGN ${num.toLocaleString("en-NG")}`;
     };
 
     const getStatusColor = (status) => {
@@ -208,7 +490,6 @@ export default function Responses() {
       }
     };
 
-    // ── HEADER ────────────────────────────────────────────────────────────
     filledRect(0, 0, pageW, 45, 0, PRIMARY_DARK);
 
     doc
@@ -216,14 +497,11 @@ export default function Responses() {
       .setFont("helvetica", "bold")
       .setTextColor(...WHITE)
       .text("Primary Colours School", margin, 20);
-
     doc.setFontSize(11).setFont("helvetica", "normal").setTextColor(220, 235, 255).text("Payment Responses Report", margin, 28);
-
     doc.setFontSize(7).setTextColor(220, 235, 255);
     doc.text(`Generated: ${new Date().toLocaleString("en-NG")}`, pageW - margin, 20, { align: "right" });
     doc.text(`Records: ${paymentRecords.length}`, pageW - margin, 27, { align: "right" });
 
-    // Filter summary bar
     filledRect(margin, 38, contentW, 12, 2, PRIMARY_LIGHT);
     doc
       .setFontSize(7)
@@ -231,21 +509,19 @@ export default function Responses() {
       .setTextColor(...PRIMARY);
 
     let filterParts = [];
-    if (startDate || endDate) filterParts.push(`📅 ${startDate || "Any"} – ${endDate || "Any"}`);
-    if (status !== "all") filterParts.push(`🏷️ ${formatStatus(status)}`);
-    if (search.trim()) filterParts.push(`🔍 "${search}"`);
+    if (startDate || endDate) filterParts.push(`Date: ${startDate || "Any"} - ${endDate || "Any"}`);
+    if (status !== "all") filterParts.push(`Status: ${formatStatus(status)}`);
+    if (search.trim()) filterParts.push(`Search: "${search}"`);
 
-    doc.text(filterParts.length > 0 ? `Filters: ${filterParts.join("  •  ")}` : "Filters: None", margin + 4, 45.5);
+    doc.text(filterParts.length > 0 ? `Filters: ${filterParts.join("  |  ")}` : "Filters: None", margin + 4, 45.5);
 
     doc
       .setDrawColor(...SLATE_200)
       .setLineWidth(0.3)
       .line(0, 52, pageW, 52);
 
-    // ── TABLE SETUP (7 columns with proper grammar headers) ─────────────────
     const tableStartY = 60;
 
-    // ✅ Proper grammar: "Payment Date" and "Date Submitted"
     const columns = [
       { header: "Child Name", dataKey: "child", width: 32, align: "left" },
       { header: "Class", dataKey: "class", width: 20, align: "left" },
@@ -266,7 +542,6 @@ export default function Responses() {
       status: formatStatus(record.status),
     }));
 
-    // ── AUTO TABLE ────────────────────────────────────────────────────────
     autoTable(doc, {
       startY: tableStartY,
       head: [columns.map((col) => col.header)],
@@ -288,55 +563,39 @@ export default function Responses() {
         lineWidth: 0.1,
         lineColor: SLATE_200,
       },
-      alternateRowStyles: {
-        fillColor: SLATE_50,
-      },
+      alternateRowStyles: { fillColor: SLATE_50 },
       columnStyles: columns.reduce((acc, col, idx) => {
-        acc[idx] = {
-          cellWidth: col.width,
-          halign: col.align,
-          fontStyle: idx === 0 ? "bold" : "normal",
-        };
+        acc[idx] = { cellWidth: col.width, halign: col.align, fontStyle: idx === 0 ? "bold" : "normal" };
         return acc;
       }, {}),
-      styles: {
-        overflow: "linebreak",
-        halign: "left",
-      },
+      styles: { overflow: "linebreak", halign: "left" },
       margin: { left: margin, right: margin },
       didParseCell: (hookData) => {
-        // Color-code status column
         if (hookData.column.index === 6 && hookData.section === "body") {
-          const statusText = hookData.cell.raw;
-          hookData.cell.styles.textColor = getStatusColor(statusText);
+          hookData.cell.styles.textColor = getStatusColor(hookData.cell.raw);
           hookData.cell.styles.fontStyle = "bold";
         }
-        // Right-align amounts
         if (hookData.column.index === 3) {
           hookData.cell.styles.halign = "right";
           hookData.cell.styles.fontStyle = "bold";
         }
       },
       didDrawPage: (data) => {
-        // Footer on every page
         const footerY = pageH - 15;
         doc
           .setDrawColor(...SLATE_400)
           .setLineWidth(0.2)
           .line(margin, footerY, pageW - margin, footerY);
-
         doc
           .setFontSize(6)
           .setFont("helvetica", "normal")
           .setTextColor(...SLATE_400);
-
         doc.text("Primary Colours School • Confidential", margin, footerY + 5);
         doc.text(`Page ${data.pageNumber} of ${data.pageCount}`, pageW - margin, footerY + 5, { align: "right" });
       },
     });
 
-    const filename = `Payment_Responses_${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(filename);
+    doc.save(`Payment_Responses_${new Date().toISOString().slice(0, 10)}.pdf`);
     toast.success("PDF exported successfully");
   };
 
@@ -391,9 +650,8 @@ export default function Responses() {
           )}
         </div>
 
-        {/* Filters - Responsive */}
+        {/* Filters */}
         <div className="flex flex-col gap-3">
-          {/* Row 1: Search + Status */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
@@ -424,10 +682,8 @@ export default function Responses() {
             </Select>
           </div>
 
-          {/* Row 2: Date Range - Fixed for mobile */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="flex flex-wrap items-center gap-2 flex-1">
-              {/* Start Date */}
               <div className="relative flex-[1_1_120px] min-w-[120px]">
                 <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 <Input
@@ -440,11 +696,7 @@ export default function Responses() {
                   className="pl-9 w-full text-xs sm:text-sm"
                 />
               </div>
-
-              {/* "to" separator - hidden on mobile */}
               <span className="text-xs text-slate-400 shrink-0 hidden sm:inline">to</span>
-
-              {/* End Date */}
               <div className="relative flex-[1_1_120px] min-w-[120px]">
                 <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 <Input
@@ -459,8 +711,6 @@ export default function Responses() {
                 />
               </div>
             </div>
-
-            {/* Clear button - wraps to new line on mobile */}
             {(startDate || endDate) && (
               <button
                 type="button"
@@ -473,7 +723,7 @@ export default function Responses() {
           </div>
         </div>
 
-        {/* Mobile / Tablet Card List (hidden on lg+) */}
+        {/* Mobile / Tablet Card List */}
         <div className="lg:hidden space-y-3">
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-xs sm:text-sm">Loading payment records...</div>
@@ -534,7 +784,7 @@ export default function Responses() {
           )}
         </div>
 
-        {/* Desktop Table (lg+) */}
+        {/* Desktop Table */}
         <div className="hidden lg:block bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
             <Table>
@@ -636,7 +886,6 @@ export default function Responses() {
 
           {selectedRecord && (
             <div className="space-y-3 sm:space-y-4">
-              {/* Payment Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2.5 sm:p-3 md:p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 {[
                   { label: "Child Name", value: selectedRecord.nameOfChild },
@@ -653,7 +902,41 @@ export default function Responses() {
                 ))}
               </div>
 
-              {/* Items */}
+              {selectedRecord.paymentEvidenceType && (
+                <div className="p-2.5 sm:p-3 md:p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <p className="text-[10px] sm:text-xs text-slate-500 mb-2">Payment Evidence</p>
+                  {selectedRecord.paymentEvidenceType === "text" ? (
+                    <div className="flex items-start gap-2">
+                      <FileText size={14} className="text-slate-400 mt-0.5 shrink-0" />
+                      <p className="text-xs sm:text-sm font-mono bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 break-all">
+                        {selectedRecord.paymentEvidenceText || "No reference provided"}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <ImageIcon size={14} className="text-slate-400 shrink-0" />
+                        <p className="text-xs text-slate-500">
+                          Uploaded: {new Date(selectedRecord.paymentEvidenceUploadedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      {selectedRecord.paymentEvidenceImage?.data ? (
+                        <img
+                          src={getEvidenceImageSrc(selectedRecord)}
+                          alt="Payment receipt"
+                          className="w-full max-h-48 sm:max-h-60 object-contain rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(getEvidenceImageSrc(selectedRecord), "_blank")}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center p-4 bg-slate-100 dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+                          <p className="text-xs text-slate-400">Image not available</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3 pb-2 border-b">
                   <h4 className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">Payment Items</h4>
@@ -671,7 +954,7 @@ export default function Responses() {
                   )}
                 </div>
 
-                <div className="space-y-1.5 sm:space-y-2 max-h-[250px] sm:max-h-[300px] overflow-y-auto pr-1">
+                <div className="space-y-1.5 sm:space-y-2 max-h-[200px] sm:max-h-[250px] overflow-y-auto pr-1">
                   {selectedRecord.items.map((item) => (
                     <div
                       key={item._id}
@@ -705,7 +988,6 @@ export default function Responses() {
                 </div>
               </div>
 
-              {/* Total */}
               <div className="flex items-center justify-between p-2.5 sm:p-3 md:p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
                 <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">Total Amount</p>
                 <p className="text-sm sm:text-base md:text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap">
@@ -713,7 +995,6 @@ export default function Responses() {
                 </p>
               </div>
 
-              {/* Status Info */}
               {selectedRecord.status !== "pending" && (
                 <div className="p-2.5 sm:p-3 md:p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2">
                   <p className="text-[10px] sm:text-xs text-slate-500">Overall Status</p>
@@ -741,7 +1022,6 @@ export default function Responses() {
             </div>
           )}
 
-          {/* Footer */}
           <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:justify-end gap-2">
             {selectedRecord?.items?.some((item) => item.status === "pending") ? (
               <>
@@ -752,7 +1032,6 @@ export default function Responses() {
                   variant="outline"
                   onClick={openRejectModal}
                   className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs sm:text-sm h-9"
-                  title="Reject all pending items. Already accepted items remain approved."
                 >
                   <XCircle size={14} className="mr-1.5 shrink-0" />
                   <span className="truncate">Reject Pending</span>
@@ -767,9 +1046,21 @@ export default function Responses() {
                 </Button>
               </>
             ) : (
-              <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
-                Close
-              </Button>
+              <>
+                {selectedRecord?.items?.some((item) => item.status === "accepted") && (
+                  <Button
+                    variant="outline"
+                    onClick={() => generateReceiptPDF(selectedRecord)}
+                    className="w-full sm:w-auto text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 text-xs sm:text-sm h-9"
+                  >
+                    <Receipt size={14} className="mr-1.5 shrink-0" />
+                    <span className="truncate">Download Receipt</span>
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
+                  Close
+                </Button>
+              </>
             )}
           </div>
         </DialogContent>

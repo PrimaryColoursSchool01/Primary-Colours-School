@@ -47,49 +47,34 @@ const paymentRecordSchema = new mongoose.Schema(
     rejectedAt: { type: Date, default: null },
     rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
-    // ── PAYMENT EVIDENCE (Text or Compressed Image in DB) ───────────────
-    paymentEvidence: {
-      type: {
-        type: String,
-        enum: ["text", "image"],
-        required: function () {
-          return this.isNew; // ✅ compulsory on new records, safe on old ones being updated
-        },
-      },
-      textReference: {
-        type: String,
-        trim: true,
-        maxlength: 150,
-        required: function () {
-          return this.paymentEvidence?.type === "text";
-        },
-      },
-      // ✅ Buffer (BinData) — no Base64 bloat, compressed via sharp before saving
-      image: {
-        data: {
-          type: Buffer,
-          required: function () {
-            return this.paymentEvidence?.type === "image";
-          },
-        },
-        contentType: {
-          type: String,
-          enum: ["image/jpeg", "image/png", "image/webp"],
-          required: function () {
-            return this.paymentEvidence?.type === "image";
-          },
-        },
-      },
-      uploadedAt: { type: Date, default: Date.now },
+    // ── PAYMENT EVIDENCE (Flat structure, zero red lines) ───────────────
+    paymentEvidenceType: {
+      type: String,
+      enum: ["text", "image"],
+      required: true,
     },
+    paymentEvidenceText: {
+      type: String,
+      trim: true,
+      maxlength: 150,
+      //  Validate "required" in controller
+    },
+    //  Buffer (BinData) — efficient binary storage, no Base64 bloat
+    paymentEvidenceImage: {
+      type: Buffer,
+      //  Validate presence in controller
+    },
+    paymentEvidenceContentType: {
+      type: String,
+      enum: ["image/jpeg", "image/png", "image/webp"],
+      //  Validate presence in controller
+    },
+    paymentEvidenceUploadedAt: { type: Date, default: Date.now },
   },
   { timestamps: true },
 );
 
 // ── AUTO-CALCULATE PARENT STATUS ───────────────────────────────
-// Using async function — Mongoose 7+ awaits the returned promise automatically,
-// so no next() callback is needed. The callback style breaks with Model.create()
-// in Mongoose 9.x, causing "next is not a function".
 paymentRecordSchema.pre("save", async function () {
   if (!this.isModified("items")) return;
 
