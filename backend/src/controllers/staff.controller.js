@@ -336,9 +336,8 @@ export const getStaffHistory = async (req, res, next) => {
     }
 
     // ─── 2. INDEPENDENT FILTERS: Only add if explicitly provided ───────
-    const activeFilters = [baseFilter]; // Start with base auth/scope filter
+    const activeFilters = [baseFilter];
 
-    // Date range filter (only if BOTH dates provided, or at least one is explicitly set)
     if (startDate || endDate) {
       const dateFilter = {};
       if (startDate) dateFilter.$gte = new Date(startDate);
@@ -350,7 +349,6 @@ export const getStaffHistory = async (req, res, next) => {
       activeFilters.push({ handedOverAt: dateFilter });
     }
 
-    // Class filter (only if classId provided AND baseFilter has paymentRecordId.$in)
     if (classId && baseFilter.paymentRecordId?.$in) {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id.toString());
@@ -359,16 +357,13 @@ export const getStaffHistory = async (req, res, next) => {
       if (filteredPRIds.length > 0) {
         activeFilters.push({ paymentRecordId: { $in: filteredPRIds } });
       } else {
-        // No matching classes → force empty result
         activeFilters.push({ _id: new mongoose.Types.ObjectId("000000000000000000000000") });
       }
     }
 
-    // Search filter (only if search provided)
     if (search && search.trim()) {
       const q = search.trim();
 
-      // Parallel lookups across related collections for performance
       const [matchingPRs, matchingItems, matchingStaff] = await Promise.all([
         PaymentRecord.find({ nameOfChild: { $regex: q, $options: "i" } }).select("_id"),
         Item.find({ name: { $regex: q, $options: "i" } }).select("_id"),
@@ -381,22 +376,64 @@ export const getStaffHistory = async (req, res, next) => {
       if (matchingStaff.length) searchConditions.push({ handedOverBy: { $in: matchingStaff.map((u) => u._id) } });
 
       if (searchConditions.length === 0) {
-        // No matches found anywhere → force empty result
         activeFilters.push({ _id: new mongoose.Types.ObjectId("000000000000000000000000") });
       } else {
         activeFilters.push({ $or: searchConditions });
       }
     }
 
-    // ─── 3. COMBINE ALL ACTIVE FILTERS WITH $and ───────────────────────
-    const finalFilter =
-      activeFilters.length === 1
-        ? activeFilters[0] // Only base filter → no $and needed
-        : { $and: activeFilters }; // Multiple filters → combine safely
+    // ─── 3. COMBINE ALL ACTIVE FILTERS ────────────────────────────────
+    const preSearchFilter = activeFilters.length === 1 ? activeFilters[0] : { $and: activeFilters };
 
-    // ─── 4. EXECUTE QUERIES ────────────────────────────────────────────
-    const [transactions, total] = await Promise.all([
-      ItemTransaction.find(finalFilter)
+    // ─── 4. EXECUTE QUERIES ───────────────────────────────────────────
+    let transactions, total;
+
+    if (search && search.trim()) {
+      const q = search.trim();
+
+      // Aggregation with relevance scoring so child-name matches rank above item/staff matches
+      const pipeline = [
+        { $match: preSearchFilter },
+        {
+          $lookup: {
+            from: "paymentrecords",
+            localField: "paymentRecordId",
+            foreignField: "_id",
+            as: "_pr",
+          },
+        },
+        {
+          $addFields: {
+            _relevanceScore: {
+              $cond: [
+                {
+                  $regexMatch: {
+                    input: { $ifNull: [{ $arrayElemAt: ["$_pr.nameOfChild", 0] }, ""] },
+                    regex: q,
+                    options: "i",
+                  },
+                },
+                2, // child name match → highest priority
+                1, // item/staff match → lower priority
+              ],
+            },
+          },
+        },
+        { $sort: { _relevanceScore: -1, handedOverAt: -1 } },
+        {
+          $facet: {
+            data: [{ $skip: skip }, { $limit: limitNum }],
+            count: [{ $count: "total" }],
+          },
+        },
+      ];
+
+      const [result] = await ItemTransaction.aggregate(pipeline);
+      total = result.count[0]?.total || 0;
+
+      // Re-fetch with Mongoose populate using the ordered IDs from aggregation
+      const ids = result.data.map((t) => t._id);
+      const populated = await ItemTransaction.find({ _id: { $in: ids } })
         .populate({
           path: "paymentRecordId",
           select: "nameOfChild classId",
@@ -404,12 +441,29 @@ export const getStaffHistory = async (req, res, next) => {
         })
         .populate("itemId", "name")
         .populate("handedOverBy", "fullName")
-        .sort({ handedOverAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      ItemTransaction.countDocuments(finalFilter),
-    ]);
+        .lean();
+
+      // Restore the sort order from aggregation since populate scrambles it
+      const orderMap = new Map(ids.map((id, i) => [id.toString(), i]));
+      transactions = populated.sort((a, b) => orderMap.get(a._id.toString()) - orderMap.get(b._id.toString()));
+    } else {
+      // No search — skip scoring, use original path
+      [transactions, total] = await Promise.all([
+        ItemTransaction.find(preSearchFilter)
+          .populate({
+            path: "paymentRecordId",
+            select: "nameOfChild classId",
+            populate: { path: "classId", select: "name" },
+          })
+          .populate("itemId", "name")
+          .populate("handedOverBy", "fullName")
+          .sort({ handedOverAt: -1 })
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        ItemTransaction.countDocuments(preSearchFilter),
+      ]);
+    }
 
     const pages = Math.ceil(total / limitNum);
 
