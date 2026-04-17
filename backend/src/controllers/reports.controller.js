@@ -180,12 +180,8 @@ export const getPaymentSummary = async (req, res, next) => {
       { $project: { _id: 0, name: "$itemName", count: "$pendingCount" } },
     ]);
 
-    // ── 4. CLASS BREAKDOWN (Three-stage approach) ─────────────────────
-    // EXPLANATION: This shows class-level performance across TWO workflows:
-    // 1. Payment Approval (admin): How many payments per class are accepted/pending/rejected?
-    // 2. Item Fulfillment (staff): Of approved items, how many have been handed to students?
-
-    // Stage A: Payment-level stats per class (count payments, not items)
+    // ── 4. CLASS BREAKDOWN (Three-stage approach with REVENUE from accepted items) ─────────────────────
+    // Stage A: Payment-level stats per class with REVENUE from accepted items only
     const classPaymentStats = await PaymentRecord.aggregate([
       { $match: matchStage },
       {
@@ -197,17 +193,48 @@ export const getPaymentSummary = async (req, res, next) => {
         },
       },
       { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // First group by payment to preserve payment-level counts
+      {
+        $group: {
+          _id: "$_id",
+          classId: { $first: "$classId" },
+          className: { $first: "$classInfo.name" },
+          status: { $first: "$status" },
+          totalAmount: { $first: "$totalAmount" }, // Keep original for reference
+          items: { $first: "$items" },
+        },
+      },
+
+      // Unwind items to calculate revenue from accepted items only
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$_id", // Group back by payment ID
+          classId: { $first: "$classId" },
+          className: { $first: "$className" },
+          status: { $first: "$status" },
+          // Revenue: sum of accepted item amounts ONLY
+          acceptedRevenue: {
+            $sum: {
+              $cond: [{ $eq: ["$items.status", "accepted"] }, "$items.amountAtPayment", 0],
+            },
+          },
+        },
+      },
+
+      // Final grouping by class
       {
         $group: {
           _id: "$classId",
-          className: { $first: "$classInfo.name" },
-          // Count PAYMENTS by status (each payment counted once)
+          className: { $first: "$className" },
+          // Payment counts (each payment counted once)
           paymentsAccepted: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
           paymentsPartiallyAccepted: { $sum: { $cond: [{ $eq: ["$status", "partially_accepted"] }, 1, 0] } },
           paymentsPending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
           paymentsRejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-          // Total amount is payment-level (sum of all items in payment)
-          totalAmount: { $sum: "$totalAmount" },
+          // Revenue: sum of accepted item revenue ONLY (consistent with main summary)
+          totalAmount: { $sum: "$acceptedRevenue" }, //  FIXED: Now shows revenue from accepted items
         },
       },
     ]);
@@ -268,7 +295,7 @@ export const getPaymentSummary = async (req, res, next) => {
         paymentsPartiallyAccepted: cls.paymentsPartiallyAccepted || 0,
         paymentsPending: cls.paymentsPending || 0,
         paymentsRejected: cls.paymentsRejected || 0,
-        totalAmount: cls.totalAmount || 0,
+        totalAmount: cls.totalAmount || 0, //  Now shows revenue from accepted items only
         // Item counts (staff workflow)
         itemsAccepted, // How many items were approved for this class?
         itemsCollected, // How many of those approved items have been handed to students?
