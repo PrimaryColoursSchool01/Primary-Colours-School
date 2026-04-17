@@ -18,7 +18,6 @@ import {
   User,
   SlidersHorizontal,
   FileX,
-  Database,
 } from "lucide-react";
 
 /* ─── Styles ──────────────────────────────────────────────────────────────── */
@@ -67,59 +66,32 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString("en-NG", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-/* ─── Mock Data Generator ─────────────────────────────────────────────────── */
-function generateMockHistory(count = 100) {
-  const students = [
-    "Ahmad Ibrahim",
-    "Fatima Musa",
-    "Umar Dayyib",
-    "Aisha Bello",
-    "Yusuf Aliyu",
-    "Zainab Sani",
-    "Ibrahim Musa",
-    "Hauwa Garba",
-    "Abubakar Tanko",
-    "Maryam Adamu",
-  ];
-  const classes = ["JSS 1A", "JSS 1B", "JSS 2A", "JSS 2B", "JSS 3A", "SS 1A", "SS 1B", "SS 2A", "SS 3A", "SS 3B"];
-  const items = [
-    "Mathematics Textbook",
-    "English Textbook",
-    "School Uniform",
-    "Sports Kit",
-    "Science Lab Coat",
-    "School Bus Fee",
-    "Library Fee",
-    "ICT Fee",
-    "Exam Fee",
-    "PTA Levy",
-  ];
-  const staff = ["John Doe", "Jane Smith", "Ahmad Ibrahim", "Fatima Musa"];
-  const notes = ["Parent picked up", "Student collected", "Office delivery", "Via class rep", null, null];
-
-  return Array.from({ length: count }, (_, i) => ({
-    id: `mock-hist-${i + 1}`,
-    studentName: students[Math.floor(Math.random() * students.length)],
-    className: classes[Math.floor(Math.random() * classes.length)],
-    itemName: items[Math.floor(Math.random() * items.length)],
-    quantity: Math.floor(Math.random() * 3) + 1,
-    handedOverBy: staff[Math.floor(Math.random() * staff.length)],
-    handedOverAt: new Date(Date.now() - Math.floor(Math.random() * 60) * 24 * 60 * 60 * 1000).toISOString(),
-    note: notes[Math.floor(Math.random() * notes.length)],
-  }));
-}
-
-/* ─── Skeleton ────────────────────────────────────────────────────────────── */
+/* ─── Enhanced Skeleton Loader with Meaningful Message & Motion ──────────── */
 function PageSkeleton() {
   return (
     <div className="hist-page p-3 sm:p-5 lg:p-8 space-y-4 fade-in">
+      {/* Spinner + messages */}
+      <div className="text-center sm:text-left space-y-2 mb-4">
+        <div className="flex justify-center sm:justify-start items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          <p className="text-slate-500 font-medium">Loading history...</p>
+        </div>
+        <p className="text-sm text-slate-400">Fetching your collection records, please wait.</p>
+      </div>
+
+      {/* Header skeleton */}
       <div className="skeleton h-24 rounded-2xl" />
+      {/* Search bar skeleton */}
       <div className="skeleton h-20 rounded-xl" />
+      {/* Table rows skeleton */}
       <div className="space-y-2">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="skeleton h-16 rounded-xl" style={{ opacity: 1 - i * 0.1 }} />
         ))}
       </div>
+
+      {/* Subtle footer note */}
+      <p className="text-center text-xs text-slate-400 animate-pulse pt-4">Preparing your history...</p>
     </div>
   );
 }
@@ -160,8 +132,8 @@ function Pagination({ page, pages, total, limit, onPage }) {
   for (let i = 1; i <= pages; i++) {
     if (i === 1 || i === pages || (i >= page - 1 && i <= page + 1)) {
       range.push(i);
-    } else if (range[range.length - 1] !== "…") {
-      range.push("…");
+    } else if (range[range.length - 1] !== "...") {
+      range.push("...");
     }
   }
   return (
@@ -182,9 +154,9 @@ function Pagination({ page, pages, total, limit, onPage }) {
           <ChevronLeft className="h-4 w-4" />
         </button>
         {range.map((p, i) =>
-          p === "…" ? (
-            <span key={`e${i}`} className="px-1 text-slate-300 text-sm">
-              …
+          p === "..." ? (
+            <span key={`ellipsis-${i}`} className="px-1 text-slate-300 text-sm">
+              ...
             </span>
           ) : (
             <button
@@ -210,14 +182,9 @@ function Pagination({ page, pages, total, limit, onPage }) {
 
 /* ─── Note Badge ─────────────────────────────────────────────────────────── */
 function NoteBadge({ note }) {
-  // Show dash for empty or default system notes
   if (!note || note === "Marked as collected") return <span className="text-slate-300">—</span>;
-
   return (
-    <span
-      className="block max-w-[150px] truncate text-xs italic text-slate-500 cursor-help"
-      title={note} // Native browser tooltip shows full text on hover
-    >
+    <span className="block max-w-[150px] truncate text-xs italic text-slate-500 cursor-help" title={note}>
       "{note}"
     </span>
   );
@@ -234,8 +201,8 @@ function defaultDates() {
 }
 
 export default function StaffHistory() {
-  const [loading, setLoading] = useState(true); // Full-page loading (initial mount only)
-  const [refreshing, setRefreshing] = useState(false); // Subtle refresh indicator (search/pagination/filter updates)
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [total, setTotal] = useState(0);
@@ -247,26 +214,14 @@ export default function StaffHistory() {
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState(""); // Debounced search value
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-
-  // Applied filters (only update when user clicks Apply)
   const [appliedStart, setAppliedStart] = useState(defaults.start);
   const [appliedEnd, setAppliedEnd] = useState(defaults.end);
 
-  // Mock data toggle
-  const [useMockData, setUseMockData] = useState(false);
-  const [mockData, setMockData] = useState([]);
-
-  // Refs
   const searchInputRef = useRef(null);
 
-  // Generate mock data once on mount
-  useEffect(() => {
-    setMockData(generateMockHistory(100));
-  }, []);
-
-  // Debounce search input (300ms delay)
+  // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
@@ -277,87 +232,39 @@ export default function StaffHistory() {
   const fetchHistory = useCallback(
     async (pg = 1, isInitialLoad = false) => {
       try {
-        // Only set full-page loading on initial mount
         if (isInitialLoad) {
           setLoading(true);
         } else {
-          // For search/pagination/filter updates, use subtle refreshing indicator
           setRefreshing(true);
         }
         setError(null);
 
-        if (useMockData) {
-          // Mock data mode with independent filters (mirrors backend logic)
-          let filtered = [...mockData];
+        const params = { page: pg, limit: LIMIT };
+        if (debouncedSearch.trim()) params.search = debouncedSearch;
 
-          // Date range filter: ONLY if custom range applied (not default)
-          const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
-          if (hasCustomDateRange && (appliedStart || appliedEnd)) {
-            filtered = filtered.filter((t) => {
-              const tDate = new Date(t.handedOverAt);
-              if (appliedStart && tDate < new Date(appliedStart)) return false;
-              if (appliedEnd) {
-                const end = new Date(appliedEnd);
-                end.setHours(23, 59, 59, 999);
-                if (tDate > end) return false;
-              }
-              return true;
-            });
-          }
-
-          // Search filter: ALWAYS independent (only if provided)
-          if (debouncedSearch.trim()) {
-            const q = debouncedSearch.toLowerCase();
-            filtered = filtered.filter(
-              (t) =>
-                t.studentName?.toLowerCase().includes(q) ||
-                t.itemName?.toLowerCase().includes(q) ||
-                t.className?.toLowerCase().includes(q) ||
-                t.handedOverBy?.toLowerCase().includes(q),
-            );
-          }
-
-          const totalFiltered = filtered.length;
-          const startIdx = (pg - 1) * LIMIT;
-          const paginated = filtered.slice(startIdx, startIdx + LIMIT);
-
-          setTransactions(paginated);
-          setTotal(totalFiltered);
-          setPage(pg);
-          setPages(Math.ceil(totalFiltered / LIMIT));
-        } else {
-          // Real API mode - INDEPENDENT FILTERS (Stripe/HubSpot style)
-          const params = { page: pg, limit: LIMIT };
-
-          // Search: ALWAYS send if provided (independent)
-          if (debouncedSearch.trim()) params.search = debouncedSearch;
-
-          // Date range: ONLY send if user explicitly applied a custom range (not default)
-          const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
-          if (hasCustomDateRange) {
-            if (appliedStart) params.startDate = appliedStart;
-            if (appliedEnd) params.endDate = appliedEnd;
-          }
-
-          const res = await getStaffHistory(params);
-          setTransactions(res.data.transactions || []);
-          setTotal(res.data.total || 0);
-          setPage(res.data.page || 1);
-          setPages(res.data.pages || 0);
+        const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
+        if (hasCustomDateRange) {
+          if (appliedStart) params.startDate = appliedStart;
+          if (appliedEnd) params.endDate = appliedEnd;
         }
+
+        const res = await getStaffHistory(params);
+        setTransactions(res.data.transactions || []);
+        setTotal(res.data.total || 0);
+        setPage(res.data.page || 1);
+        setPages(res.data.pages || 0);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load history");
         toast.error("Could not load history");
       } finally {
-        // Always clear both loading states
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [useMockData, mockData, appliedStart, appliedEnd, debouncedSearch, defaults],
+    [debouncedSearch, appliedStart, appliedEnd, defaults],
   );
 
-  // Initial fetch (full-page loading)
+  // Initial fetch (full‑page loading)
   useEffect(() => {
     fetchHistory(1, true);
   }, []);
@@ -365,10 +272,9 @@ export default function StaffHistory() {
   // Fetch when applied filters or debounced search change (subtle refreshing)
   useEffect(() => {
     if (!loading) {
-      // Skip if still doing initial load
       fetchHistory(1, false);
     }
-  }, [appliedStart, appliedEnd, debouncedSearch, useMockData]);
+  }, [appliedStart, appliedEnd, debouncedSearch]);
 
   const handleApplyFilters = () => {
     setAppliedStart(startDate);
@@ -390,26 +296,9 @@ export default function StaffHistory() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Client-side search for mock data only (real API handles it server-side)
-  const visible =
-    useMockData && debouncedSearch.trim()
-      ? transactions.filter((t) => {
-          const q = debouncedSearch.toLowerCase();
-          return (
-            t.studentName?.toLowerCase().includes(q) ||
-            t.itemName?.toLowerCase().includes(q) ||
-            t.className?.toLowerCase().includes(q) ||
-            t.handedOverBy?.toLowerCase().includes(q)
-          );
-        })
-      : transactions;
-
-  // Only show date filter chip if custom range is applied (not default)
   const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
   const hasActiveFilters = hasCustomDateRange || debouncedSearch;
 
-  /* ── Render ── */
-  // Only show full-page skeleton on initial load
   if (loading) return <PageSkeleton />;
 
   if (error) {
@@ -459,32 +348,18 @@ export default function StaffHistory() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Mock data toggle */}
-            <Button
-              variant={useMockData ? "default" : "outline"}
-              size="sm"
-              onClick={() => setUseMockData((v) => !v)}
-              className={`h-9 text-xs font-semibold ${useMockData ? "bg-emerald-600 hover:bg-emerald-700" : "hover:border-emerald-500 hover:text-emerald-600"}`}
-            >
-              <Database className="mr-1.5 h-3.5 w-3.5" />
-              {useMockData ? "Mock Data" : "Use Mock"}
-            </Button>
-
-            {/* Subtle refreshing indicator - only shows during search/pagination/filter updates */}
-            {refreshing && (
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Updating…
-              </div>
-            )}
-          </div>
+          {/* Subtle refreshing indicator */}
+          {refreshing && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Updating…
+            </div>
+          )}
         </div>
 
         {/* ── Search + Filter Bar ──────────────────────────────────── */}
         <div className="fade-up-1 space-y-2">
           <div className="flex gap-2">
-            {/* Search */}
             <div className="search-wrap relative flex-1">
               <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
               <Input
@@ -504,7 +379,6 @@ export default function StaffHistory() {
               )}
             </div>
 
-            {/* Date filter toggle */}
             <button
               onClick={() => setShowFilters((v) => !v)}
               className={`filter-pill flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-all ${showFilters || hasCustomDateRange ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-200 bg-white text-slate-600"}`}
@@ -591,23 +465,15 @@ export default function StaffHistory() {
           )}
         </div>
 
-        {/* Mock data banner */}
-        {useMockData && (
-          <div className="fade-in rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 flex items-center gap-2 text-sm text-emerald-700">
-            <Database className="h-4 w-4" />
-            Showing mock data for testing. Toggle off to use real API.
-          </div>
-        )}
-
         {/* ── Content ─────────────────────────────────────────────── */}
         <div className="fade-up-2">
-          {visible.length === 0 ? (
+          {transactions.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <EmptyState filtered={hasActiveFilters} onClear={handleClearFilters} />
             </div>
           ) : (
             <>
-              {/* ── Desktop Table (md+) ─────────────────────────────── */}
+              {/* Desktop Table (md+) */}
               <div className="hidden md:block rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -622,7 +488,7 @@ export default function StaffHistory() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {visible.map((tx, idx) => (
+                    {transactions.map((tx, idx) => (
                       <tr key={tx.id} className="tbl-row" style={{ animationDelay: `${idx * 25}ms` }}>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
@@ -679,9 +545,9 @@ export default function StaffHistory() {
                 )}
               </div>
 
-              {/* ── Mobile Cards (< md) ─────────────────────────────── */}
+              {/* Mobile Cards (< md) */}
               <div className="md:hidden space-y-2">
-                {visible.map((tx, idx) => (
+                {transactions.map((tx, idx) => (
                   <div
                     key={tx.id}
                     className="row-item rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"

@@ -120,20 +120,36 @@ const styles = `
   }
 `;
 
-/* ─── Skeleton Loader ────────────────────────────────────────────────────── */
+/* ─── Enhanced Skeleton Loader with Meaningful Message & Motion ──────────── */
 function DashboardSkeleton() {
   return (
     <div className="staff-dash p-4 sm:p-6 lg:p-8 space-y-5 animate-fade-in">
+      {/* Spinner and descriptive message */}
+      <div className="text-center sm:text-left space-y-2 mb-6">
+        <div className="flex justify-center sm:justify-start items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#136dec] border-t-transparent" />
+          <p className="text-slate-500 font-medium">Loading dashboard...</p>
+        </div>
+        <p className="text-sm text-slate-400">Fetching your assignments and pending tasks, please wait.</p>
+      </div>
+
+      {/* Banner skeleton */}
       <div className="skeleton h-36 sm:h-40 w-full rounded-2xl" />
+      {/* Stats skeletons */}
       <div className="grid grid-cols-2 gap-4">
         <div className="skeleton h-28 rounded-xl" />
         <div className="skeleton h-28 rounded-xl" />
       </div>
+      {/* Priority actions skeleton */}
       <div className="skeleton h-64 rounded-xl" />
+      {/* Navigation skeletons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="skeleton h-14 rounded-xl" />
         <div className="skeleton h-14 rounded-xl" />
       </div>
+
+      {/* Subtle footer note */}
+      <p className="text-center text-xs text-slate-400 animate-pulse mt-4">Preparing your staff dashboard...</p>
     </div>
   );
 }

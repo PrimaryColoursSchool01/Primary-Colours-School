@@ -5,19 +5,7 @@ import { getStaffAssignments, markCollected } from "@/services/staff.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
-import {
-  Package,
-  CheckCircle2,
-  Loader2,
-  AlertCircle,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  ClipboardList,
-  Calendar,
-  Database,
-} from "lucide-react";
+import { Package, CheckCircle2, Loader2, AlertCircle, Search, ChevronLeft, ChevronRight, X, ClipboardList, Calendar } from "lucide-react";
 
 /* ─── Styles ──────────────────────────────────────────────────────────────── */
 const styles = `
@@ -64,7 +52,6 @@ const styles = `
     box-shadow: inset 3px 0 0 #136dec;
   }
 
-  /* Desktop table row hover */
   .tbl-row {
     transition: background 0.12s ease;
   }
@@ -76,10 +63,6 @@ const styles = `
 
   .collect-chip {
     transition: all 0.15s ease;
-  }
-
-  .filter-bar {
-    transition: all 0.2s ease;
   }
 
   .page-btn {
@@ -112,56 +95,32 @@ function formatDate(iso) {
   });
 }
 
-/* ─── Mock Data Generator ─────────────────────────────────────────────────── */
-function generateMockTransactions(count = 100) {
-  const students = [
-    "Ahmad Ibrahim",
-    "Fatima Musa",
-    "Umar Dayyib",
-    "Aisha Bello",
-    "Yusuf Aliyu",
-    "Zainab Sani",
-    "Ibrahim Musa",
-    "Hauwa Garba",
-    "Abubakar Tanko",
-    "Maryam Adamu",
-  ];
-  const classes = ["JSS 1A", "JSS 1B", "JSS 2A", "JSS 2B", "JSS 3A", "SS 1A", "SS 1B", "SS 2A", "SS 3A", "SS 3B"];
-  const items = [
-    "Mathematics Textbook",
-    "English Textbook",
-    "School Uniform",
-    "Sports Kit",
-    "Science Lab Coat",
-    "School Bus Fee",
-    "Library Fee",
-    "ICT Fee",
-    "Exam Fee",
-    "PTA Levy",
-  ];
-
-  return Array.from({ length: count }, (_, i) => ({
-    id: `mock-${i + 1}`,
-    studentName: students[Math.floor(Math.random() * students.length)],
-    className: classes[Math.floor(Math.random() * classes.length)],
-    itemName: items[Math.floor(Math.random() * items.length)],
-    quantity: Math.floor(Math.random() * 3) + 1,
-    dateOfPayment: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString(),
-    status: "pending",
-  }));
-}
-
-/* ─── Skeleton ────────────────────────────────────────────────────────────── */
+/* ─── Enhanced Skeleton Loader with Meaningful Message & Motion ──────────── */
 function PageSkeleton() {
   return (
     <div className="asgn-page p-3 sm:p-5 lg:p-8 space-y-4 fade-in">
+      {/* Spinner + messages */}
+      <div className="text-center sm:text-left space-y-2 mb-4">
+        <div className="flex justify-center sm:justify-start items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#136dec] border-t-transparent" />
+          <p className="text-slate-500 font-medium">Loading assignments...</p>
+        </div>
+        <p className="text-sm text-slate-400">Fetching your distribution list, please wait.</p>
+      </div>
+
+      {/* Header skeleton */}
       <div className="skeleton h-24 rounded-2xl" />
+      {/* Search bar skeleton */}
       <div className="skeleton h-14 rounded-xl" />
+      {/* Table rows skeleton */}
       <div className="space-y-2">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="skeleton h-16 rounded-xl" style={{ opacity: 1 - i * 0.1 }} />
         ))}
       </div>
+
+      {/* Subtle footer note */}
+      <p className="text-center text-xs text-slate-400 animate-pulse pt-4">Preparing your assignments...</p>
     </div>
   );
 }
@@ -302,8 +261,8 @@ function Pagination({ page, pages, total, limit, onPage }) {
   for (let i = 1; i <= pages; i++) {
     if (i === 1 || i === pages || (i >= page - 1 && i <= page + 1)) {
       range.push(i);
-    } else if (range[range.length - 1] !== "…") {
-      range.push("…");
+    } else if (range[range.length - 1] !== "...") {
+      range.push("...");
     }
   }
 
@@ -326,9 +285,9 @@ function Pagination({ page, pages, total, limit, onPage }) {
         </button>
 
         {range.map((p, i) =>
-          p === "…" ? (
-            <span key={`e${i}`} className="px-1 text-slate-300 text-sm">
-              …
+          p === "..." ? (
+            <span key={`ellipsis-${i}`} className="px-1 text-slate-300 text-sm">
+              ...
             </span>
           ) : (
             <button
@@ -368,56 +327,24 @@ export default function StaffAssignments() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
-
-  // Search only (no class filter)
   const [search, setSearch] = useState("");
-
-  // Mock data toggle
-  const [useMockData, setUseMockData] = useState(false);
-
-  // Collect modal
   const [collecting, setCollecting] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch assignments (real API or mock)
   const fetchAssignments = useCallback(
     async (pg = 1, silent = false) => {
       try {
         silent ? setRefreshing(true) : setLoading(true);
         setError(null);
 
-        if (useMockData) {
-          // Mock data mode
-          let mock = generateMockTransactions(100);
+        const params = { page: pg, limit: LIMIT };
+        if (search.trim()) params.search = search;
 
-          // API-style search filtering for mock data
-          if (search.trim()) {
-            const q = search.toLowerCase();
-            mock = mock.filter(
-              (t) =>
-                t.studentName.toLowerCase().includes(q) || t.itemName.toLowerCase().includes(q) || t.className.toLowerCase().includes(q),
-            );
-          }
-
-          const totalFiltered = mock.length;
-          const start = (pg - 1) * LIMIT;
-          const paginated = mock.slice(start, start + LIMIT);
-
-          setTransactions(paginated);
-          setTotal(totalFiltered);
-          setPage(pg);
-          setPages(Math.ceil(totalFiltered / LIMIT));
-        } else {
-          // Real API mode - search is API-based
-          const params = { page: pg, limit: LIMIT };
-          if (search.trim()) params.search = search;
-
-          const res = await getStaffAssignments(params);
-          setTransactions(res.data.transactions || []);
-          setTotal(res.data.total || 0);
-          setPage(res.data.page || 1);
-          setPages(res.data.pages || 0);
-        }
+        const res = await getStaffAssignments(params);
+        setTransactions(res.data.transactions || []);
+        setTotal(res.data.total || 0);
+        setPage(res.data.page || 1);
+        setPages(res.data.pages || 0);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load assignments");
         toast.error("Could not load assignments");
@@ -426,13 +353,12 @@ export default function StaffAssignments() {
         setRefreshing(false);
       }
     },
-    [useMockData, search],
+    [search],
   );
 
-  // Fetch on mount and when search/mock toggle changes
   useEffect(() => {
     fetchAssignments(1);
-  }, [search, useMockData]);
+  }, [search, fetchAssignments]);
 
   const handlePage = (p) => {
     fetchAssignments(p, true);
@@ -443,16 +369,9 @@ export default function StaffAssignments() {
     if (!collecting || submitting) return;
     setSubmitting(true);
     try {
-      if (useMockData) {
-        // Mock collect: remove from list locally
-        setTransactions((prev) => prev.filter((t) => t.id !== collecting.id));
-        setTotal((prev) => prev - 1);
-        toast.success("Item marked as collected (mock)");
-      } else {
-        await markCollected(collecting.id, note);
-        toast.success("Item marked as collected");
-        fetchAssignments(page, true);
-      }
+      await markCollected(collecting.id, note);
+      toast.success("Item marked as collected");
+      fetchAssignments(page, true);
       setCollecting(null);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to mark as collected");
@@ -462,21 +381,8 @@ export default function StaffAssignments() {
   };
 
   const clearSearch = () => setSearch("");
-
   const hasSearch = !!search;
 
-  // Client-side filter for mock data only (real API handles search server-side)
-  const visible =
-    useMockData && search.trim()
-      ? transactions.filter(
-          (t) =>
-            t.studentName?.toLowerCase().includes(search.toLowerCase()) ||
-            t.itemName?.toLowerCase().includes(search.toLowerCase()) ||
-            t.className?.toLowerCase().includes(search.toLowerCase()),
-        )
-      : transactions;
-
-  /* ── Render ── */
   if (loading) return <PageSkeleton />;
 
   if (error) {
@@ -520,27 +426,12 @@ export default function StaffAssignments() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Mock data toggle */}
-            <Button
-              variant={useMockData ? "default" : "outline"}
-              size="sm"
-              onClick={() => setUseMockData((v) => !v)}
-              className={`h-9 text-xs font-semibold ${
-                useMockData ? "bg-emerald-600 hover:bg-emerald-700" : "hover:border-[#136dec] hover:text-[#136dec]"
-              }`}
-            >
-              <Database className="mr-1.5 h-3.5 w-3.5" />
-              {useMockData ? "Mock Data" : "Use Mock"}
-            </Button>
-
-            {refreshing && (
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Updating…
-              </div>
-            )}
-          </div>
+          {refreshing && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Updating…
+            </div>
+          )}
         </div>
 
         {/* ── Search Bar Only (No Filters) ───────────────────────────── */}
@@ -563,7 +454,6 @@ export default function StaffAssignments() {
             )}
           </div>
 
-          {/* Active search chip */}
           {hasSearch && (
             <div className="fade-in flex items-center gap-2 mt-2">
               <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
@@ -576,23 +466,15 @@ export default function StaffAssignments() {
           )}
         </div>
 
-        {/* Mock data banner */}
-        {useMockData && (
-          <div className="fade-in rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 flex items-center gap-2 text-sm text-emerald-700">
-            <Database className="h-4 w-4" />
-            Showing mock data for testing. Toggle off to use real API.
-          </div>
-        )}
-
         {/* ── Content ─────────────────────────────────────────────── */}
         <div className="fade-up-2">
-          {visible.length === 0 ? (
+          {transactions.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <EmptyState filtered={hasSearch} onClear={clearSearch} />
             </div>
           ) : (
             <>
-              {/* ── Desktop Table (md+) ─────────────────────────────── */}
+              {/* Desktop Table (md+) */}
               <div className="hidden md:block rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -606,9 +488,8 @@ export default function StaffAssignments() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {visible.map((tx, idx) => (
+                    {transactions.map((tx, idx) => (
                       <tr key={tx.id} className="tbl-row" style={{ animationDelay: `${idx * 30}ms` }}>
-                        {/* Student */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <div
@@ -620,11 +501,9 @@ export default function StaffAssignments() {
                             <span className="font-semibold text-slate-900 truncate max-w-[160px]">{tx.studentName}</span>
                           </div>
                         </td>
-                        {/* Class */}
                         <td className="px-4 py-3.5">
                           <span className="text-slate-600 font-medium">{tx.className}</span>
                         </td>
-                        {/* Item */}
                         <td className="px-4 py-3.5">
                           <span
                             className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold"
@@ -634,15 +513,12 @@ export default function StaffAssignments() {
                             {tx.itemName}
                           </span>
                         </td>
-                        {/* Qty */}
                         <td className="px-4 py-3.5 text-center">
                           <span className="font-bold text-slate-800">{tx.quantity}</span>
                         </td>
-                        {/* Date */}
                         <td className="px-4 py-3.5">
                           <span className="text-slate-500 text-xs">{formatDate(tx.dateOfPayment)}</span>
                         </td>
-                        {/* Action */}
                         <td className="px-5 py-3.5 text-right">
                           <button
                             className="collect-chip inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600"
@@ -657,7 +533,6 @@ export default function StaffAssignments() {
                   </tbody>
                 </table>
 
-                {/* Table footer with pagination */}
                 {pages > 1 && (
                   <div className="border-t border-slate-100 px-5 py-3">
                     <Pagination page={page} pages={pages} total={total} limit={LIMIT} onPage={handlePage} />
@@ -665,15 +540,14 @@ export default function StaffAssignments() {
                 )}
               </div>
 
-              {/* ── Mobile Cards (< md) ─────────────────────────────── */}
+              {/* Mobile Cards (< md) */}
               <div className="md:hidden space-y-2">
-                {visible.map((tx, idx) => (
+                {transactions.map((tx, idx) => (
                   <div
                     key={tx.id}
                     className="row-item rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                     style={{ animationDelay: `${idx * 40}ms` }}
                   >
-                    {/* Top row: avatar + name + collect button */}
                     <div className="flex items-center gap-3">
                       <div
                         className="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
@@ -695,8 +569,6 @@ export default function StaffAssignments() {
                         Collect
                       </Button>
                     </div>
-
-                    {/* Bottom row: item pill + qty + date */}
                     <div className="mt-3 flex flex-wrap items-center gap-2 pl-[52px]">
                       <span
                         className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold"
@@ -718,7 +590,6 @@ export default function StaffAssignments() {
                   </div>
                 ))}
 
-                {/* Mobile pagination */}
                 {pages > 1 && (
                   <div className="pt-2">
                     <Pagination page={page} pages={pages} total={total} limit={LIMIT} onPage={handlePage} />
@@ -730,7 +601,6 @@ export default function StaffAssignments() {
         </div>
       </div>
 
-      {/* ── Collect Modal ──────────────────────────────────────────── */}
       <CollectModal
         item={collecting}
         open={!!collecting}
