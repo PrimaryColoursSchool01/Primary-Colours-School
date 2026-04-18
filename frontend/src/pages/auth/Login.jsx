@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/store";
 import { login } from "@/services/auth.service";
@@ -45,11 +45,11 @@ export default function Login() {
           }}
         />
 
-        {/* Glow orbs - lighter blue */}
+        {/* Glow orbs */}
         <div className="absolute -top-40 -left-24 w-[560px] h-[560px] rounded-full bg-[#136dec]/25 blur-[80px]" />
         <div className="absolute -bottom-32 -right-20 w-[420px] h-[420px] rounded-full bg-[#136dec]/10 blur-[80px]" />
 
-        {/* Top — School Badge (INCREASED: h-12 → h-14) */}
+        {/* Top — School Badge */}
         <div className="relative z-10 flex items-center gap-3">
           <img src="/primarcoloursbadge.png" alt="Primary Colours Schools" className="h-14 w-auto object-contain" />
           <span className="text-white/90 text-sm font-bold tracking-tight">Primary Colours Schools</span>
@@ -97,7 +97,7 @@ export default function Login() {
 
       {/* ── Right Panel ─────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 sm:px-10 lg:px-14 bg-[#F1F5F9] lg:bg-white relative overflow-hidden">
-        {/* Grid texture for mobile - lighter */}
+        {/* Grid texture for mobile */}
         <div
           className="absolute inset-0 lg:hidden"
           style={{
@@ -109,10 +109,10 @@ export default function Login() {
           }}
         />
 
-        {/* Mobile glow orb - lighter */}
+        {/* Mobile glow orb */}
         <div className="absolute -top-40 -right-24 w-[400px] h-[400px] rounded-full bg-[#136dec]/15 blur-[80px] lg:hidden" />
 
-        {/* Mobile brand — School Badge (INCREASED: h-16 → h-20) */}
+        {/* Mobile brand */}
         <div className="relative z-10 flex flex-col items-center gap-3 mb-10 lg:hidden">
           <img src="/primarcoloursbadge.png" alt="Primary Colours Schools" className="h-20 w-auto object-contain" />
           <div className="text-center">
@@ -121,7 +121,7 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Desktop brand — School Badge (INCREASED: h-20 → h-24) */}
+        {/* Desktop brand */}
         <div className="relative z-10 hidden lg:flex flex-col items-center gap-3 mb-10">
           <img src="/primarcoloursbadge.png" alt="Primary Colours Schools" className="h-24 w-auto object-contain" />
         </div>
@@ -184,6 +184,13 @@ export default function Login() {
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
+            </div>
+
+            {/* Forgot Password Link */}
+            <div className="text-right">
+              <Link to="/forgot-password" className="text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors">
+                Forgot password?
+              </Link>
             </div>
 
             {/* Submit */}
