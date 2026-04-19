@@ -30,18 +30,11 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
-    if (!/[A-Z]/.test(newPassword)) {
-      toast.error("Password must contain at least one uppercase letter");
-      return;
-    }
-    if (!/[0-9]/.test(newPassword)) {
-      toast.error("Password must contain at least one number");
-      return;
-    }
+
     if (newPassword !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -122,7 +115,7 @@ export default function ResetPassword() {
                 {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
-            <p className="text-[10px] text-slate-400">Must be 8+ characters, include uppercase & number</p>
+            <p className="text-[10px] text-slate-400">Must be at least 6 characters</p>
           </div>
 
           {/* Confirm Password */}
