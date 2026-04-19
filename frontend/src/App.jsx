@@ -6,6 +6,8 @@ import { Toaster } from "sonner";
 
 // Auth
 import Login from "./pages/auth/Login";
+import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
+import ResetPassword from "./pages/auth/ResetPassword.jsx";
 
 // Admin pages
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
