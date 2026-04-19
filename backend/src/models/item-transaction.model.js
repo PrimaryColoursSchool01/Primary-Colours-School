@@ -36,15 +36,14 @@ const itemTransactionSchema = new mongoose.Schema(
     status: {
       type: String,
       required: true,
-      enum: ["unassigned", "pending", "collected"],
-      default: "unassigned",
-      // CHANGE: Was "pending", now "unassigned" because new transactions have no staff assigned yet
+      enum: ["no_role", "no_staff", "pending", "collected"],
+      default: "no_role",
     },
     handedOverAt: {
       type: Date,
       default: null,
     },
-    // NEW: Track status change history for audit trail
+    // Track status change history for audit trail
     statusHistory: [
       {
         status: {
@@ -68,7 +67,7 @@ const itemTransactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// NEW: Index for faster queries on status and staff assignment
+// Indexes for faster queries
 itemTransactionSchema.index({ status: 1, staffIds: 1 });
 itemTransactionSchema.index({ paymentRecordId: 1 });
 
