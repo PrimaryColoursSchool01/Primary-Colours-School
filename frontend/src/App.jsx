@@ -21,6 +21,7 @@ import Roles from "./pages/roles/Roles.jsx";
 import Items from "./pages/items/Items.jsx";
 import ChangePassword from "./pages/settings/ChangePassword.jsx";
 import Profile from "./pages/profile/Profile.jsx";
+import Configuration from "./pages/configuration/Configuration.jsx";
 
 // Staff pages
 import StaffDashboard from "./pages/staff/StaffDashboard";
@@ -108,6 +109,7 @@ export default function App() {
           <Route path="users" element={<Users />} />
           <Route path="roles" element={<Roles />} />
           <Route path="items" element={<Items />} />
+          <Route path="configuration-health" element={<Configuration />} />
           <Route path="change-password" element={<ChangePassword />} />
           <Route path="profile" element={<Profile />} />
         </Route>
