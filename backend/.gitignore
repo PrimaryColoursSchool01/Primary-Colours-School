@@ -1,2 +1,12 @@
 /node_modules
 /.env
+
+
+# One-time migration scripts
+scripts/migrate-*.js
+scripts/*.js
+
+# Backup files
+backups/
+*.bson
+*.metadata.json

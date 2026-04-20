@@ -360,24 +360,48 @@ export const updatePaymentRecordById = async (req, res, next) => {
     const transactionDocs = [];
 
     for (const item of newlyAcceptedItems) {
+      // 1. Find roles assigned to this item
       const roles = await Role.find({ itemIds: item.itemId });
       const roleIds = roles.map((r) => r._id);
-      const staffMembers = await User.find({ roles: { $in: roleIds }, userType: "staff" });
-      const staffIds = staffMembers.map((s) => s._id);
+
+      // 2. Find active staff in those roles
+      let staffMembers = await User.find({
+        roles: { $in: roleIds },
+        userType: "staff",
+        status: "active", // Only include active staff
+      });
+      let staffIds = staffMembers.map((s) => s._id);
+
+      // 3. Determine SPECIFIC status and reason
+      let status, reason;
+
+      if (roles.length === 0) {
+        // Case A: Item has no assigned role
+        status = "no_role";
+        reason = "Item has no assigned role";
+      } else if (staffIds.length === 0) {
+        // Case B: Item has roles but no active staff
+        status = "no_staff";
+        reason = `Assigned role(s) have no active staff: ${roles.map((r) => r.name).join(", ")}`;
+      } else {
+        // Case C: Normal routing
+        status = "pending";
+        reason = "Auto-assigned on payment acceptance";
+      }
 
       transactionDocs.push({
         paymentRecordId: paymentRecord._id,
         itemId: item.itemId,
         quantity: item.quantity,
         amountAtPayment: item.amountAtPayment,
-        staffIds,
-        status: staffIds.length > 0 ? "pending" : "unassigned",
+        staffIds, // Empty array for no_role/no_staff
+        status, //  Now specific: "no_role", "no_staff", or "pending"
         statusHistory: [
           {
-            status: staffIds.length > 0 ? "pending" : "unassigned",
+            status,
             changedBy: req.user.id,
             changedAt: new Date(),
-            reason: "Created on payment acceptance",
+            reason, //  Clear audit trail
           },
         ],
       });

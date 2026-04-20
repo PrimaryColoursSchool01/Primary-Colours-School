@@ -299,28 +299,70 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
-      // Get all itemIds from NEW roles
-      const newRoleItemIds = await Role.find({ _id: { $in: finalRoleIds } }).distinct("itemIds");
+      //  NEW: Detect which roles are being ADDED
+      const oldRoleIds = user.roles.map((r) => r.toString());
+      const addedRoleIds = finalRoleIds.filter((id) => !oldRoleIds.includes(id));
 
-      // CHANGE: Find pending AND unassigned item transactions this user is assigned to
+      //  NEW: If new roles were added, auto-assign stuck "no_staff" items
+      if (addedRoleIds.length > 0) {
+        // Find all items linked to the newly added roles
+        const linkedItems = await Item.find({ roles: { $in: addedRoleIds } }).select("_id");
+        const linkedItemIds = linkedItems.map((i) => i._id);
+
+        if (linkedItemIds.length > 0) {
+          // Update matching "no_staff" transactions to "pending" and assign to this user
+          await ItemTransaction.updateMany(
+            { itemId: { $in: linkedItemIds }, status: "no_staff" },
+            {
+              $set: {
+                status: "pending",
+                staffIds: [user._id],
+              },
+              $push: {
+                statusHistory: {
+                  status: "pending",
+                  changedBy: req.user.id, // Admin who made the change
+                  changedAt: new Date(),
+                  reason: "Auto-assigned: User added to role",
+                },
+              },
+            },
+          );
+
+          console.log(` Auto-assigned ${linkedItemIds.length} items to user ${user.fullName}`);
+        }
+      }
+
+      // ── Existing logic: Remove user from items no longer in their roles ──
+      const newRoleItemIds = await Role.find({ _id: { $in: finalRoleIds } }).distinct("itemIds");
       const userItemTransactions = await ItemTransaction.find({
-        staffIds: id,
-        status: { $in: ["pending", "unassigned"] },
+        staffIds: user._id,
+        status: { $in: ["pending", "no_staff", "no_role"] }, //  Include new statuses
       });
 
-      // Find transactions where item is no longer in user's new roles
       const itemTransactionsToRemoveUser = userItemTransactions.filter(
         (transaction) => !newRoleItemIds.map((i) => i.toString()).includes(transaction.itemId.toString()),
       );
 
       if (itemTransactionsToRemoveUser.length > 0) {
         const transactionIds = itemTransactionsToRemoveUser.map((t) => t._id);
+        await ItemTransaction.updateMany({ _id: { $in: transactionIds } }, { $pull: { staffIds: user._id } });
 
-        // Pull user from those item transactions
-        await ItemTransaction.updateMany({ _id: { $in: transactionIds } }, { $pull: { staffIds: id } });
-
-        // Mark item transactions with no staff left as unassigned
-        await ItemTransaction.updateMany({ _id: { $in: transactionIds }, staffIds: { $size: 0 } }, { $set: { status: "unassigned" } });
+        // Mark item transactions with no staff left as no_staff (not generic unassigned)
+        await ItemTransaction.updateMany(
+          { _id: { $in: transactionIds }, staffIds: { $size: 0 } },
+          {
+            $set: { status: "no_staff" },
+            $push: {
+              statusHistory: {
+                status: "no_staff",
+                changedBy: req.user.id,
+                changedAt: new Date(),
+                reason: "No active staff in assigned role(s)",
+              },
+            },
+          },
+        );
       }
 
       user.roles = finalRoleIds;
@@ -435,6 +477,37 @@ export const unsuspendUser = async (req, res, next) => {
       return next(err);
     }
 
+    //  NEW: Before activating, auto-assign any "no_staff" items this user can now handle
+    if (user.roles?.length > 0) {
+      // Find items linked to this user's roles
+      const linkedItems = await Item.find({ roles: { $in: user.roles } }).select("_id");
+      const linkedItemIds = linkedItems.map((i) => i._id);
+
+      if (linkedItemIds.length > 0) {
+        // Update matching "no_staff" transactions to "pending" and assign to this user
+        await ItemTransaction.updateMany(
+          { itemId: { $in: linkedItemIds }, status: "no_staff" },
+          {
+            $set: {
+              status: "pending",
+              staffIds: [user._id],
+            },
+            $push: {
+              statusHistory: {
+                status: "pending",
+                changedBy: req.user.id, // Admin who unsuspended
+                changedAt: new Date(),
+                reason: "Auto-assigned: User unsuspended and now active",
+              },
+            },
+          },
+        );
+
+        console.log(` Auto-assigned items to unsuspended user ${user.fullName}`);
+      }
+    }
+
+    // Now activate the user
     user.status = "active";
     user.suspendedAt = null;
     await user.save();
@@ -487,11 +560,10 @@ export const deleteUserById = async (req, res, next) => {
     // Pull deleted user from all item transactions
     await ItemTransaction.updateMany({ staffIds: id }, { $pull: { staffIds: id } });
 
-    // CHANGE: Mark item transactions with no staff left as unassigned (was only checking "pending" status)
-    // Now handles both "pending" and "unassigned" statuses
+    //  CHANGE: Mark item transactions with no staff left as no_staff (handles new statuses)
     await ItemTransaction.updateMany(
-      { staffIds: { $size: 0 }, status: { $in: ["pending", "unassigned"] } },
-      { $set: { status: "unassigned" } },
+      { staffIds: { $size: 0 }, status: { $in: ["pending", "no_staff", "no_role"] } },
+      { $set: { status: "no_staff" } },
     );
 
     return res.status(200).json({

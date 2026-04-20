@@ -1,4 +1,3 @@
-// controllers/report.controller.js
 import mongoose from "mongoose";
 import PaymentRecord from "../models/payment-record.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
@@ -26,13 +25,9 @@ export const getPaymentSummary = async (req, res, next) => {
       matchStage.status = status;
     }
 
-    // ── 1. PAYMENT SUMMARY (Fixed: Count payments, not items) ─
-    // Two-stage aggregation:
-    // Stage 1: Group by payment ID to count each payment ONCE
-    // Stage 2: Unwind items to calculate item-based revenue
+    // ── 1. PAYMENT SUMMARY ────────────────────────────────────────────
     const summaryResult = await PaymentRecord.aggregate([
       { $match: matchStage },
-      // First, group by payment ID to preserve payment-level counts
       {
         $group: {
           _id: "$_id",
@@ -42,14 +37,12 @@ export const getPaymentSummary = async (req, res, next) => {
           items: { $first: "$items" },
         },
       },
-      // Now unwind items to calculate revenue from accepted items only
       { $unwind: "$items" },
       {
         $group: {
-          _id: "$_id", // Group back by payment ID
+          _id: "$_id",
           status: { $first: "$status" },
           modeOfPayment: { $first: "$modeOfPayment" },
-          // Revenue: sum of accepted item amounts
           totalRevenue: {
             $sum: {
               $cond: [{ $eq: ["$items.status", "accepted"] }, "$items.amountAtPayment", 0],
@@ -60,7 +53,6 @@ export const getPaymentSummary = async (req, res, next) => {
               $cond: [{ $and: [{ $eq: ["$items.status", "pending"] }, { $ne: ["$status", "rejected"] }] }, "$items.amountAtPayment", 0],
             },
           },
-          // Payment mode amounts: only from accepted items
           bankAmount: {
             $sum: {
               $cond: [
@@ -91,25 +83,21 @@ export const getPaymentSummary = async (req, res, next) => {
               ],
             },
           },
-          // Mark if this payment has at least one accepted item (for mode counting)
           hasAcceptedItem: {
             $max: { $cond: [{ $eq: ["$items.status", "accepted"] }, 1, 0] },
           },
         },
       },
-      // Final grouping: sum up all payments
       {
         $group: {
           _id: null,
           totalRevenue: { $sum: "$totalRevenue" },
           pendingRevenue: { $sum: "$pendingRevenue" },
-          // Payment counts: each payment counted ONCE
           acceptedCount: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
           partiallyAcceptedCount: { $sum: { $cond: [{ $eq: ["$status", "partially_accepted"] }, 1, 0] } },
           pendingCount: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
           rejectedCount: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-          totalCount: { $sum: 1 }, // Now correctly counts payments, not items
-          // Payment mode counts: count payment if it has accepted items
+          totalCount: { $sum: 1 },
           bankCount: {
             $sum: { $cond: [{ $and: [{ $eq: ["$modeOfPayment", "bank-transfer"] }, { $eq: ["$hasAcceptedItem", 1] }] }, 1, 0] },
           },
@@ -132,13 +120,14 @@ export const getPaymentSummary = async (req, res, next) => {
       },
     ]);
 
-    // ── 2. ITEM FULFILLMENT (via ItemTransaction collection) ──────────
+    // ── 2. ITEM FULFILLMENT (via ItemTransaction) ─────────────────────
     const acceptedPaymentIds = await PaymentRecord.find({
       ...matchStage,
       "items.status": "accepted",
     }).distinct("_id");
 
-    const [pendingItems, collectedItems] = await Promise.all([
+    //  FIX: Only count routable items (pending + collected) for rate
+    const [pendingItems, collectedItems, noRoleItems, noStaffItems] = await Promise.all([
       ItemTransaction.countDocuments({
         paymentRecordId: { $in: acceptedPaymentIds },
         status: "pending",
@@ -147,11 +136,21 @@ export const getPaymentSummary = async (req, res, next) => {
         paymentRecordId: { $in: acceptedPaymentIds },
         status: "collected",
       }),
+      ItemTransaction.countDocuments({
+        paymentRecordId: { $in: acceptedPaymentIds },
+        status: "no_role",
+      }),
+      ItemTransaction.countDocuments({
+        paymentRecordId: { $in: acceptedPaymentIds },
+        status: "no_staff",
+      }),
     ]);
 
-    const totalFulfillmentItems = pendingItems + collectedItems;
+    //  FIX: Collection rate only counts routable items
+    const routableItems = pendingItems + collectedItems;
+    const collectionRate = routableItems > 0 ? Math.round((collectedItems / routableItems) * 100) : 0;
 
-    // ── 3. TOP PENDING ITEMS (via ItemTransaction) ────────────────────
+    // ── 3. TOP PENDING ITEMS ─────────────────────────────────────────
     const topPendingItems = await ItemTransaction.aggregate([
       {
         $match: {
@@ -180,8 +179,7 @@ export const getPaymentSummary = async (req, res, next) => {
       { $project: { _id: 0, name: "$itemName", count: "$pendingCount" } },
     ]);
 
-    // ── 4. CLASS BREAKDOWN (Three-stage approach with REVENUE from accepted items) ─────────────────────
-    // Stage A: Payment-level stats per class with REVENUE from accepted items only
+    // ── 4. CLASS BREAKDOWN ───────────────────────────────────────────
     const classPaymentStats = await PaymentRecord.aggregate([
       { $match: matchStage },
       {
@@ -193,28 +191,23 @@ export const getPaymentSummary = async (req, res, next) => {
         },
       },
       { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
-
-      // First group by payment to preserve payment-level counts
       {
         $group: {
           _id: "$_id",
           classId: { $first: "$classId" },
           className: { $first: "$classInfo.name" },
           status: { $first: "$status" },
-          totalAmount: { $first: "$totalAmount" }, // Keep original for reference
+          totalAmount: { $first: "$totalAmount" },
           items: { $first: "$items" },
         },
       },
-
-      // Unwind items to calculate revenue from accepted items only
       { $unwind: "$items" },
       {
         $group: {
-          _id: "$_id", // Group back by payment ID
+          _id: "$_id",
           classId: { $first: "$classId" },
           className: { $first: "$className" },
           status: { $first: "$status" },
-          // Revenue: sum of accepted item amounts ONLY
           acceptedRevenue: {
             $sum: {
               $cond: [{ $eq: ["$items.status", "accepted"] }, "$items.amountAtPayment", 0],
@@ -222,28 +215,23 @@ export const getPaymentSummary = async (req, res, next) => {
           },
         },
       },
-
-      // Final grouping by class
       {
         $group: {
           _id: "$classId",
           className: { $first: "$className" },
-          // Payment counts (each payment counted once)
           paymentsAccepted: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
           paymentsPartiallyAccepted: { $sum: { $cond: [{ $eq: ["$status", "partially_accepted"] }, 1, 0] } },
           paymentsPending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
           paymentsRejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-          // Revenue: sum of accepted item revenue ONLY (consistent with main summary)
-          totalAmount: { $sum: "$acceptedRevenue" }, //  FIXED: Now shows revenue from accepted items
+          totalAmount: { $sum: "$acceptedRevenue" },
         },
       },
     ]);
 
-    // Stage B: Accepted item counts per class (for completion rate calculation)
     const classItemStats = await PaymentRecord.aggregate([
       { $match: matchStage },
       { $unwind: "$items" },
-      { $match: { "items.status": "accepted" } }, // Only count accepted items
+      { $match: { "items.status": "accepted" } },
       {
         $group: {
           _id: "$classId",
@@ -252,7 +240,6 @@ export const getPaymentSummary = async (req, res, next) => {
       },
     ]);
 
-    // Stage C: Collected item counts per class via ItemTransaction
     const classFulfillmentStats = await ItemTransaction.aggregate([
       {
         $match: {
@@ -277,31 +264,26 @@ export const getPaymentSummary = async (req, res, next) => {
       },
     ]);
 
-    // Merge all three results in JavaScript
     const paymentMap = new Map(classPaymentStats.map((c) => [c._id?.toString(), c]));
     const itemMap = new Map(classItemStats.map((c) => [c._id?.toString(), c.acceptedItemCount]));
     const fulfillmentMap = new Map(classFulfillmentStats.map((c) => [c._id?.toString(), c.collectedCount]));
 
     const byClassResult = classPaymentStats.map((cls) => {
       const classId = cls._id?.toString();
-      const itemsAccepted = itemMap.get(classId) || 0; // Count of accepted ITEMS (not payments)
-      const itemsCollected = fulfillmentMap.get(classId) || 0; // Count of collected ITEMS
+      const itemsAccepted = itemMap.get(classId) || 0;
+      const itemsCollected = fulfillmentMap.get(classId) || 0;
 
       return {
         _id: cls._id,
         className: cls.className || "Unknown",
-        // Payment counts (admin workflow)
         paymentsAccepted: cls.paymentsAccepted || 0,
         paymentsPartiallyAccepted: cls.paymentsPartiallyAccepted || 0,
         paymentsPending: cls.paymentsPending || 0,
         paymentsRejected: cls.paymentsRejected || 0,
-        totalAmount: cls.totalAmount || 0, //  Now shows revenue from accepted items only
-        // Item counts (staff workflow)
-        itemsAccepted, // How many items were approved for this class?
-        itemsCollected, // How many of those approved items have been handed to students?
-        // Completion rate: % of approved items that have been collected
+        totalAmount: cls.totalAmount || 0,
+        itemsAccepted,
+        itemsCollected,
         completionRate: itemsAccepted > 0 ? Math.round((itemsCollected / itemsAccepted) * 100) : 0,
-        // Status badge based on completion rate
         statusBadge:
           itemsAccepted > 0
             ? itemsCollected / itemsAccepted >= 0.8
@@ -344,20 +326,22 @@ export const getPaymentSummary = async (req, res, next) => {
       success: true,
       data: {
         summary: {
-          totalAmount: summaryRaw.totalRevenue || 0, // Revenue from accepted items only
-          pendingRevenue: summaryRaw.pendingRevenue || 0, // Expected revenue from pending items
-          acceptedCount: summaryRaw.acceptedCount || 0, // Count of fully accepted PAYMENTS
-          partiallyAcceptedCount: summaryRaw.partiallyAcceptedCount || 0, // Count of partial PAYMENTS
-          pendingCount: summaryRaw.pendingCount || 0, // Count of pending PAYMENTS
-          rejectedCount: summaryRaw.rejectedCount || 0, // Count of rejected PAYMENTS
-          totalCount: summaryRaw.totalCount || 0, // Total PAYMENTS (fixed!)
+          totalAmount: summaryRaw.totalRevenue || 0,
+          pendingRevenue: summaryRaw.pendingRevenue || 0,
+          acceptedCount: summaryRaw.acceptedCount || 0,
+          partiallyAcceptedCount: summaryRaw.partiallyAcceptedCount || 0,
+          pendingCount: summaryRaw.pendingCount || 0,
+          rejectedCount: summaryRaw.rejectedCount || 0,
+          totalCount: summaryRaw.totalCount || 0,
           paymentModes,
         },
         itemFulfillment: {
-          totalItems: totalFulfillmentItems,
+          totalItems: pendingItems + collectedItems + noRoleItems + noStaffItems,
           collected: collectedItems,
           pending: pendingItems,
-          collectionRate: totalFulfillmentItems > 0 ? Math.round((collectedItems / totalFulfillmentItems) * 100) : 0,
+          noRole: noRoleItems, //  NEW: Expose for admin visibility
+          noStaff: noStaffItems, //  NEW: Expose for admin visibility
+          collectionRate, //  NOW ACCURATE: Only routable items
         },
         topPendingItems: topPendingItems || [],
         byClass: byClassResult || [],
