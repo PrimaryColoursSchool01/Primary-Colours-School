@@ -11,9 +11,30 @@ import User from "../models/user.model.js";
  */
 export const getConfigurationHealth = async (req, res, next) => {
   try {
-    // ── 1. ITEMS WITH NO ROLE (no_role) ───────────────────────────────
+    // ── 1. FIND ITEMS WITH NO ROLE (Check current Item config) ─
+    const itemsWithNoRoles = await Item.aggregate([
+      {
+        $lookup: {
+          from: "roles",
+          let: { itemId: "$_id" },
+          pipeline: [{ $match: { $expr: { $in: ["$$itemId", "$itemIds"] } } }],
+          as: "assignedRoles",
+        },
+      },
+      { $match: { assignedRoles: { $size: 0 } } }, // Items with ZERO roles
+      { $project: { _id: 1, name: 1 } },
+    ]);
+
+    const itemIdsWithNoRoles = itemsWithNoRoles.map((i) => i._id);
+
+    // Find stuck transactions for these items
     const noRoleAgg = await ItemTransaction.aggregate([
-      { $match: { status: "no_role" } },
+      {
+        $match: {
+          itemId: { $in: itemIdsWithNoRoles },
+          status: { $in: ["no_role", "no_staff", "pending"] },
+        },
+      },
       { $group: { _id: "$itemId", affectedTransactions: { $sum: 1 } } },
       {
         $lookup: {
@@ -35,36 +56,54 @@ export const getConfigurationHealth = async (req, res, next) => {
       { $sort: { affectedTransactions: -1 } },
     ]);
 
-    // ── 2. ITEMS WITH NO STAFF (no_staff) ─────────────────────────────
-    const noStaffAgg = await ItemTransaction.aggregate([
-      { $match: { status: "no_staff" } },
-      { $group: { _id: "$itemId", affectedTransactions: { $sum: 1 } } },
+    // ── 2. FIND ITEMS WITH NO ACTIVE STAFF (Check current Role config) ─
+    const itemsWithRoles = await Item.aggregate([
       {
         $lookup: {
-          from: "items",
-          localField: "_id",
-          foreignField: "_id",
-          as: "item",
+          from: "roles",
+          let: { itemId: "$_id" },
+          pipeline: [{ $match: { $expr: { $in: ["$$itemId", "$itemIds"] } } }],
+          as: "assignedRoles",
         },
       },
-      { $unwind: "$item" },
-      {
-        $project: {
-          _id: 0,
-          itemId: "$_id",
-          itemName: "$item.name",
-          affectedTransactions: 1,
-        },
-      },
-      { $sort: { affectedTransactions: -1 } },
+      { $match: { assignedRoles: { $gt: [] } } }, // Has at least one role
+      { $project: { _id: 1, name: 1, assignedRoles: { $map: { input: "$assignedRoles", as: "role", in: "$$role._id" } } } },
     ]);
+
+    const noStaffItems = [];
+    for (const item of itemsWithRoles) {
+      // Check if ANY of the item's roles have active staff
+      const activeStaffCount = await User.countDocuments({
+        roles: { $in: item.assignedRoles },
+        userType: "staff",
+        status: "active",
+      });
+
+      if (activeStaffCount === 0) {
+        // This item has roles but no active staff
+        const stuckTransactions = await ItemTransaction.countDocuments({
+          itemId: item._id,
+          status: { $in: ["no_staff", "pending"] },
+        });
+
+        if (stuckTransactions > 0) {
+          noStaffItems.push({
+            itemId: item._id,
+            itemName: item.name,
+            affectedTransactions: stuckTransactions,
+          });
+        }
+      }
+    }
+
+    noStaffItems.sort((a, b) => b.affectedTransactions - a.affectedTransactions);
 
     // ── 3. SUMMARY STATS ──────────────────────────────────────────────
     const summary = {
       noRoleItemsCount: noRoleAgg.length,
-      noStaffItemsCount: noStaffAgg.length,
+      noStaffItemsCount: noStaffItems.length,
       totalAffectedTransactions:
-        noRoleAgg.reduce((sum, i) => sum + i.affectedTransactions, 0) + noStaffAgg.reduce((sum, i) => sum + i.affectedTransactions, 0),
+        noRoleAgg.reduce((sum, i) => sum + i.affectedTransactions, 0) + noStaffItems.reduce((sum, i) => sum + i.affectedTransactions, 0),
     };
 
     return res.status(200).json({
@@ -72,7 +111,7 @@ export const getConfigurationHealth = async (req, res, next) => {
       data: {
         summary,
         noRoleItems: noRoleAgg,
-        noStaffItems: noStaffAgg,
+        noStaffItems: noStaffItems,
       },
     });
   } catch (error) {

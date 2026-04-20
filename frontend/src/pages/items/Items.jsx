@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom"; // ✅ ADDED: For reading ?id= parameter
 import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -251,10 +252,35 @@ export default function Items() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // ✅ ADDED: For reading ?id= parameter from Configuration page
+  const [searchParams] = useSearchParams();
+
   // ─── Load Items on Mount ───────────────────────────────────────────────────
   useEffect(() => {
     loadItems();
   }, []);
+
+  // ✅ ADDED: Highlight item when ?id= parameter is present
+  useEffect(() => {
+    const highlightId = searchParams.get("id");
+    if (highlightId) {
+      // Wait briefly for items to render, then highlight
+      const timer = setTimeout(() => {
+        const row = document.querySelector(`[data-item-id="${highlightId}"]`);
+        if (row) {
+          // Scroll to item
+          row.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Add highlight styles
+          row.classList.add("ring-2", "ring-[#136dec]", "bg-[#136dec]/5", "transition-all");
+          // Remove highlight after 3 seconds
+          setTimeout(() => {
+            row.classList.remove("ring-2", "ring-[#136dec]", "bg-[#136dec]/5");
+          }, 3000);
+        }
+      }, 300); // Small delay to ensure DOM is ready
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   const loadItems = async () => {
     try {
@@ -610,7 +636,8 @@ export default function Items() {
                 const classCountText = getClassCountText(item.classNames, item.scope);
 
                 return (
-                  <div key={item._id} className="p-3">
+                  // ✅ ADDED: data-item-id attribute for highlight logic
+                  <div key={item._id} data-item-id={item._id} className="p-3">
                     {/* Top row: Name + Price */}
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="text-sm font-bold text-slate-900 truncate flex-1">{item.name}</p>
@@ -689,7 +716,8 @@ export default function Items() {
                     const classDisplay = formatClassDisplay(item.classNames, item.scope);
 
                     return (
-                      <tr key={item._id} className="hover:bg-slate-50/60 transition-colors">
+                      // ✅ ADDED: data-item-id attribute for highlight logic
+                      <tr key={item._id} data-item-id={item._id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-4 lg:px-5 py-3.5">
                           <span className="text-sm font-bold text-slate-900">{item.name}</span>
                         </td>

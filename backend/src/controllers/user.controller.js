@@ -88,6 +88,47 @@ export const registerUser = async (req, res, next) => {
       status: "active",
     });
 
+    // ✅ NEW: If user is staff and has roles, auto-assign stuck "no_staff" items to ALL staff with those roles
+    if (finalUserType === "staff" && finalRoleIds.length > 0) {
+      // Find all items linked to the user's roles
+      const linkedItems = await Item.find({ roles: { $in: finalRoleIds } }).select("_id");
+      const linkedItemIds = linkedItems.map((i) => i._id);
+
+      if (linkedItemIds.length > 0) {
+        // ✅ FIX: Find ALL active staff with these roles (not just the new user)
+        const allStaffWithRole = await User.find({
+          roles: { $in: finalRoleIds },
+          userType: "staff",
+          status: "active",
+        }).select("_id");
+
+        if (allStaffWithRole.length > 0) {
+          const allStaffIds = allStaffWithRole.map((s) => s._id);
+
+          // Update matching "no_staff" transactions to "pending" and assign to ALL staff
+          await ItemTransaction.updateMany(
+            { itemId: { $in: linkedItemIds }, status: "no_staff" },
+            {
+              $set: {
+                status: "pending",
+                staffIds: allStaffIds, // ← Assign to ALL staff with the role
+              },
+              $push: {
+                statusHistory: {
+                  status: "pending",
+                  changedBy: req.user?.id || null, // Admin who registered the user (if available)
+                  changedAt: new Date(),
+                  reason: "Auto-assigned: All staff with role (new user registered)",
+                },
+              },
+            },
+          );
+
+          console.log(`🔄 Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
+        }
+      }
+    }
+
     // Send Welcome Email to confirm email address is valid
     try {
       await sendEmail({
@@ -303,33 +344,44 @@ export const updateUserById = async (req, res, next) => {
       const oldRoleIds = user.roles.map((r) => r.toString());
       const addedRoleIds = finalRoleIds.filter((id) => !oldRoleIds.includes(id));
 
-      //  NEW: If new roles were added, auto-assign stuck "no_staff" items
+      //  NEW: If new roles were added, auto-assign stuck "no_staff" items to ALL staff with those roles
       if (addedRoleIds.length > 0) {
         // Find all items linked to the newly added roles
         const linkedItems = await Item.find({ roles: { $in: addedRoleIds } }).select("_id");
         const linkedItemIds = linkedItems.map((i) => i._id);
 
         if (linkedItemIds.length > 0) {
-          // Update matching "no_staff" transactions to "pending" and assign to this user
-          await ItemTransaction.updateMany(
-            { itemId: { $in: linkedItemIds }, status: "no_staff" },
-            {
-              $set: {
-                status: "pending",
-                staffIds: [user._id],
-              },
-              $push: {
-                statusHistory: {
+          // ✅ FIX: Find ALL active staff with the newly added roles
+          const allStaffWithRole = await User.find({
+            roles: { $in: addedRoleIds },
+            userType: "staff",
+            status: "active",
+          }).select("_id");
+
+          if (allStaffWithRole.length > 0) {
+            const allStaffIds = allStaffWithRole.map((s) => s._id);
+
+            // Update matching "no_staff" transactions to "pending" and assign to ALL staff
+            await ItemTransaction.updateMany(
+              { itemId: { $in: linkedItemIds }, status: "no_staff" },
+              {
+                $set: {
                   status: "pending",
-                  changedBy: req.user.id, // Admin who made the change
-                  changedAt: new Date(),
-                  reason: "Auto-assigned: User added to role",
+                  staffIds: allStaffIds, // ← Assign to ALL staff with the role
+                },
+                $push: {
+                  statusHistory: {
+                    status: "pending",
+                    changedBy: req.user.id, // Admin who made the change
+                    changedAt: new Date(),
+                    reason: "Auto-assigned: All staff with new role",
+                  },
                 },
               },
-            },
-          );
+            );
 
-          console.log(` Auto-assigned ${linkedItemIds.length} items to user ${user.fullName}`);
+            console.log(`🔄 Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
+          }
         }
       }
 
@@ -477,33 +529,44 @@ export const unsuspendUser = async (req, res, next) => {
       return next(err);
     }
 
-    //  NEW: Before activating, auto-assign any "no_staff" items this user can now handle
+    //  NEW: Before activating, auto-assign any "no_staff" items this user's roles can handle
     if (user.roles?.length > 0) {
       // Find items linked to this user's roles
       const linkedItems = await Item.find({ roles: { $in: user.roles } }).select("_id");
       const linkedItemIds = linkedItems.map((i) => i._id);
 
       if (linkedItemIds.length > 0) {
-        // Update matching "no_staff" transactions to "pending" and assign to this user
-        await ItemTransaction.updateMany(
-          { itemId: { $in: linkedItemIds }, status: "no_staff" },
-          {
-            $set: {
-              status: "pending",
-              staffIds: [user._id],
-            },
-            $push: {
-              statusHistory: {
+        // ✅ FIX: Find ALL active staff with these roles (not just this user)
+        const allStaffWithRole = await User.find({
+          roles: { $in: user.roles },
+          userType: "staff",
+          status: "active",
+        }).select("_id");
+
+        if (allStaffWithRole.length > 0) {
+          const allStaffIds = allStaffWithRole.map((s) => s._id);
+
+          // Update matching "no_staff" transactions to "pending" and assign to ALL staff
+          await ItemTransaction.updateMany(
+            { itemId: { $in: linkedItemIds }, status: "no_staff" },
+            {
+              $set: {
                 status: "pending",
-                changedBy: req.user.id, // Admin who unsuspended
-                changedAt: new Date(),
-                reason: "Auto-assigned: User unsuspended and now active",
+                staffIds: allStaffIds, // ← Assign to ALL staff with the role
+              },
+              $push: {
+                statusHistory: {
+                  status: "pending",
+                  changedBy: req.user.id, // Admin who unsuspended
+                  changedAt: new Date(),
+                  reason: "Auto-assigned: All staff with role (user unsuspended)",
+                },
               },
             },
-          },
-        );
+          );
 
-        console.log(` Auto-assigned items to unsuspended user ${user.fullName}`);
+          console.log(` Auto-assigned items to ${allStaffIds.length} staff members with matching roles`);
+        }
       }
     }
 

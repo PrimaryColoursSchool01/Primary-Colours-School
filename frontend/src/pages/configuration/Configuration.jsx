@@ -1,5 +1,6 @@
 // src/pages/admin/Configuration.jsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom"; // ✅ ADDED: For client-side navigation
 import { AlertCircle, ArrowRight, Loader2, Tag, Users } from "lucide-react";
 import { getConfigurationHealth } from "@/services/configuration.service";
 import { toast } from "sonner";
@@ -8,6 +9,7 @@ export default function Configuration() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate(); // ✅ ADDED: Navigation hook
 
   useEffect(() => {
     const fetchData = async () => {
@@ -135,12 +137,13 @@ export default function Configuration() {
                     {item.affectedTransactions} payment{item.affectedTransactions !== 1 ? "s" : ""} stuck
                   </p>
                 </div>
-                <a
-                  href={`/items?id=${item.itemId}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors"
+                {/* ✅ CHANGED: Use button + navigate instead of <a> tag */}
+                <button
+                  onClick={() => navigate(`/items?id=${item.itemId}`)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors bg-transparent border-none cursor-pointer p-0"
                 >
                   Fix in Items <ArrowRight size={12} />
-                </a>
+                </button>
               </div>
             ))}
           </div>
@@ -168,12 +171,13 @@ export default function Configuration() {
                     {item.affectedTransactions} payment{item.affectedTransactions !== 1 ? "s" : ""} stuck
                   </p>
                 </div>
-                <a
-                  href={`/roles?item=${item.itemId}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors"
+                {/* ✅ CHANGED: Use button + navigate instead of <a> tag */}
+                <button
+                  onClick={() => navigate(`/roles?item=${item.itemId}`)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors bg-transparent border-none cursor-pointer p-0"
                 >
                   Fix in Roles <ArrowRight size={12} />
-                </a>
+                </button>
               </div>
             ))}
           </div>
