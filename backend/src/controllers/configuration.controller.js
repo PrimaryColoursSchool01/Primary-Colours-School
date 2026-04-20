@@ -81,9 +81,10 @@ export const getConfigurationHealth = async (req, res, next) => {
 
       if (activeStaffCount === 0) {
         // This item has roles but no active staff
+        //  FIX: Include "no_role" transactions too, since they may have just gotten a role
         const stuckTransactions = await ItemTransaction.countDocuments({
           itemId: item._id,
-          status: { $in: ["no_staff", "pending"] },
+          status: { $in: ["no_role", "no_staff", "pending"] }, // ← Added "no_role"
         });
 
         if (stuckTransactions > 0) {
