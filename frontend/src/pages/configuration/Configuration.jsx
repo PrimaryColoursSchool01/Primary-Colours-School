@@ -137,13 +137,24 @@ export default function Configuration() {
                     {item.affectedTransactions} payment{item.affectedTransactions !== 1 ? "s" : ""} stuck
                   </p>
                 </div>
-                {/* ✅ CHANGED: Use button + navigate instead of <a> tag */}
-                <button
-                  onClick={() => navigate(`/items?id=${item.itemId}`)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors bg-transparent border-none cursor-pointer p-0"
-                >
-                  Fix in Items <ArrowRight size={12} />
-                </button>
+                {/* ✅ DUAL LINKS: Let admin choose their workflow */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => navigate(`/items?id=${item.itemId}`)}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors bg-transparent border-none cursor-pointer p-0"
+                    title="Edit this item to assign it to a role"
+                  >
+                    Fix in Items <ArrowRight size={12} />
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    onClick={() => navigate(`/roles`)}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors bg-transparent border-none cursor-pointer p-0"
+                    title="Create or edit a role to include this item"
+                  >
+                    Fix in Roles <ArrowRight size={12} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
