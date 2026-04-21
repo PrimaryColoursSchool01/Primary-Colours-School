@@ -1,6 +1,18 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom"; // ✅ ADDED: For reading ?id= parameter
-import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X } from "lucide-react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import {
+  Plus,
+  Download,
+  MoreVertical,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Filter,
+  AlertTriangle,
+  X,
+  AlertCircle,
+  ArrowRight,
+} from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -230,7 +242,7 @@ function ItemsSkeleton() {
   );
 }
 
-// ─── Items ────────────────────────────────────────────────────────────────────
+// ─── Items ───────────────────────────────────────────────────────────────────
 
 export default function Items() {
   // ─── Data State ────────────────────────────────────────────────────────────
@@ -254,6 +266,7 @@ export default function Items() {
 
   // ✅ ADDED: For reading ?id= parameter from Configuration page
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // ─── Load Items on Mount ───────────────────────────────────────────────────
   useEffect(() => {
@@ -586,6 +599,40 @@ export default function Items() {
               <Plus size={14} />
               <span className="hidden sm:inline">Add Item</span>
             </button>
+          </div>
+        </div>
+
+        {/* ✅ NEW: IMPORTANT NOTICE BANNER - Remind admins to assign items to roles */}
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-amber-900 mb-1">⚠️ Important: Prevent Stuck Transactions</h3>
+              <p className="text-xs text-amber-800 mb-2">
+                After creating or editing an item, you <strong>must</strong> complete these steps to prevent payment transactions from
+                getting stuck:
+              </p>
+              <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
+                <li>
+                  Go to{" "}
+                  <button onClick={() => navigate("/roles")} className="underline font-bold hover:text-amber-900">
+                    Roles page
+                  </button>{" "}
+                  and assign this item to a role
+                </li>
+                <li>
+                  Go to{" "}
+                  <button onClick={() => navigate("/users")} className="underline font-bold hover:text-amber-900">
+                    Users page
+                  </button>{" "}
+                  and assign staff to that role
+                </li>
+              </ol>
+              <p className="text-xs text-amber-700 mt-2 italic">
+                Without these steps, items will have no staff assigned and transactions will remain stuck with status "no_role" or
+                "no_staff".
+              </p>
+            </div>
           </div>
         </div>
 
