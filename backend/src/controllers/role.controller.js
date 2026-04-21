@@ -1,6 +1,49 @@
 // controllers/roles.controller.js
 import Role from "../models/role.model.js";
 import User from "../models/user.model.js";
+import ItemTransaction from "../models/item-transaction.model.js";
+
+//  Helper: Auto-assign stuck transactions when role items change
+const autoAssignStuckTransactions = async (role, changedBy) => {
+  if (!role.itemIds?.length) return;
+
+  // Find all active staff with this role
+  const staffWithRole = await User.find({
+    roles: { $in: [role._id] },
+    userType: "staff",
+    status: "active",
+  }).select("_id");
+
+  if (staffWithRole.length === 0) return;
+
+  const staffIds = staffWithRole.map((s) => s._id);
+
+  // Update stuck transactions for these items
+  const result = await ItemTransaction.updateMany(
+    {
+      itemId: { $in: role.itemIds },
+      status: { $in: ["no_role", "no_staff"] },
+    },
+    {
+      $set: {
+        status: "pending",
+        staffIds: staffIds,
+      },
+      $push: {
+        statusHistory: {
+          status: "pending",
+          changedBy: changedBy || null,
+          changedAt: new Date(),
+          reason: "Auto-assigned: Role created/updated with active staff",
+        },
+      },
+    },
+  );
+
+  if (result.modifiedCount > 0) {
+    console.log(` Auto-assigned ${result.modifiedCount} transactions for role "${role.name}" to ${staffIds.length} staff members`);
+  }
+};
 
 export const getAllRoles = async (req, res, next) => {
   try {
@@ -84,6 +127,9 @@ export const createRole = async (req, res, next) => {
       classIds: finalClassIds,
       itemIds,
     });
+
+    //  NEW: Auto-assign stuck transactions for this role
+    await autoAssignStuckTransactions(newRole, req.user?.id);
 
     return res.status(201).json({ message: "Role created successfully", role: newRole });
   } catch (error) {
@@ -217,6 +263,11 @@ export const updateRoleById = async (req, res, next) => {
       .populate("sectionId", "name")
       .populate("classIds", "name")
       .populate("itemIds", "name");
+
+    //  NEW: If itemIds changed, auto-assign stuck transactions
+    if (itemIds !== undefined) {
+      await autoAssignStuckTransactions(updatedRole, req.user?.id);
+    }
 
     return res.status(200).json({ message: "Role updated successfully", role: updatedRole });
   } catch (error) {

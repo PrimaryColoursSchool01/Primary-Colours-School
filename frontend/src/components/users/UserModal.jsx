@@ -9,6 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
+// Helper: Extract role ID whether it's an object or string
+const extractRoleId = (role) => {
+  if (typeof role === "string") return role;
+  if (role && typeof role === "object" && role._id) return role._id;
+  return null;
+};
+
 export default function UserModal({ open, onOpenChange, mode, user, roles, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState([]);
@@ -20,6 +27,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
     setValue,
     watch,
     reset,
+    unregister, // ✅ imported
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -30,15 +38,20 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
     },
   });
 
-  // Reset form when modal opens/closes or user changes
   useEffect(() => {
     if (open) {
       if (isEdit && user) {
+        // ✅ THE FIX: explicitly drop the password field and its validation rules
+        // shadcn Dialog keeps children always mounted, so shouldUnregister never fires
+        unregister("password");
+
         setValue("fullName", user.fullName || "");
         setValue("email", user.email || "");
         setValue("userType", user.userType || "staff");
         setValue("status", user.status || "active");
-        setSelectedRoles(user.roles?.map((r) => r._id) || []);
+
+        const roleIds = user.roles?.map(extractRoleId).filter((id) => id) || [];
+        setSelectedRoles(roleIds);
       } else {
         reset();
         setValue("userType", "staff");
@@ -46,11 +59,9 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
         setSelectedRoles([]);
       }
     }
-  }, [open, user, isEdit, setValue, reset]);
+  }, [open, user, isEdit, setValue, reset, unregister]);
 
   const onSubmit = async (data) => {
-    console.log("🔵 Form submitted", { mode, userId: user?._id, data, selectedRoles });
-
     if (selectedRoles.length === 0) {
       toast.error("Please select at least one role");
       return;
@@ -58,12 +69,13 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
 
     setLoading(true);
     try {
-      const payload = { ...data, roleIds: selectedRoles };
+      const payload = {
+        ...data,
+        roleIds: selectedRoles.filter((id) => typeof id === "string"),
+      };
 
       if (isEdit) {
-        if (!user?._id) {
-          throw new Error("User ID is missing");
-        }
+        if (!user?._id) throw new Error("User ID is missing");
         await updateUser(user._id, payload);
         toast.success("User updated successfully");
       } else {
@@ -71,17 +83,25 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
         toast.success("User created successfully");
       }
 
-      onSuccess();
+      onSuccess?.();
+      onOpenChange?.(false);
     } catch (error) {
-      console.error("❌ Update failed:", error);
+      console.error("Update failed:", error);
       toast.error(error.response?.data?.message || error.message || "Operation failed");
     } finally {
       setLoading(false);
     }
   };
 
+  const onError = (validationErrors) => {
+    const firstMessage = Object.values(validationErrors)?.[0]?.message;
+    toast.error(firstMessage || "Please fix the form errors before submitting");
+  };
+
   const toggleRole = (roleId) => {
-    setSelectedRoles((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
+    const id = extractRoleId(roleId);
+    if (!id) return;
+    setSelectedRoles((prev) => (prev.includes(id) ? prev.filter((rid) => rid !== id) : [...prev, id]));
   };
 
   return (
@@ -91,7 +111,8 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
           <DialogTitle className="text-slate-900 dark:text-white text-lg sm:text-xl">{isEdit ? "Edit User" : "Add New User"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-4">
+          {/* Full Name */}
           <div className="space-y-2">
             <Label htmlFor="fullName" className="text-slate-700 dark:text-slate-300 text-sm">
               Full Name
@@ -105,6 +126,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
             {errors.fullName && <p className="text-xs text-red-600 dark:text-red-400">{errors.fullName.message}</p>}
           </div>
 
+          {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 text-sm">
               Email
@@ -125,6 +147,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
             {errors.email && <p className="text-xs text-red-600 dark:text-red-400">{errors.email.message}</p>}
           </div>
 
+          {/* Password — only shown when creating */}
           {!isEdit && (
             <div className="space-y-2">
               <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 text-sm">
@@ -147,6 +170,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
             </div>
           )}
 
+          {/* User Type */}
           <div className="space-y-2">
             <Label className="text-slate-700 dark:text-slate-300 text-sm">User Type</Label>
             <Select value={watch("userType")} onValueChange={(value) => setValue("userType", value)} disabled={isEdit}>
@@ -160,27 +184,33 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
             </Select>
           </div>
 
+          {/* Roles */}
           <div className="space-y-2">
             <Label className="text-slate-700 dark:text-slate-300 text-sm">Roles</Label>
             <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-white dark:bg-slate-950">
-              {roles.map((role) => (
-                <Badge
-                  key={role._id}
-                  variant="outline"
-                  className={`cursor-pointer text-xs ${
-                    selectedRoles.includes(role._id)
-                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800"
-                      : "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700"
-                  }`}
-                  onClick={() => toggleRole(role._id)}
-                >
-                  {role.name}
-                </Badge>
-              ))}
+              {roles?.map((role) => {
+                const roleId = extractRoleId(role);
+                if (!roleId) return null;
+                return (
+                  <Badge
+                    key={roleId}
+                    variant="outline"
+                    className={`cursor-pointer text-xs ${
+                      selectedRoles.includes(roleId)
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800"
+                        : "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+                    }`}
+                    onClick={() => toggleRole(role)}
+                  >
+                    {role.name || role}
+                  </Badge>
+                );
+              })}
             </div>
             {selectedRoles.length === 0 && <p className="text-xs text-red-600 dark:text-red-400">Select at least one role</p>}
           </div>
 
+          {/* Status — only shown when editing */}
           {isEdit && (
             <div className="space-y-2">
               <Label className="text-slate-700 dark:text-slate-300 text-sm">Status</Label>
@@ -196,6 +226,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
             </div>
           )}
 
+          {/* Actions */}
           <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
             <Button
               type="button"

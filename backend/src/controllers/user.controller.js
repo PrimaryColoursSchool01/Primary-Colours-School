@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import User from "../models/user.model.js";
 import Role from "../models/role.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
+import Item from "../models/items-fess.model.js";
 import { sendEmail } from "../utils/sendEmail.js";
 
 export const registerUser = async (req, res, next) => {
@@ -32,17 +33,14 @@ export const registerUser = async (req, res, next) => {
     return next(err);
   }
 
-  // Default to staff if not provided
   const finalUserType = userType || "staff";
 
-  // Validate userType
   if (!["admin", "staff"].includes(finalUserType)) {
     const err = new Error("User type must be 'admin' or 'staff'");
     err.statusCode = 400;
     return next(err);
   }
 
-  // Roles - convert to array if single value
   let finalRoleIds = roleIds;
   if (!finalRoleIds) {
     const err = new Error("At least one role is required");
@@ -60,7 +58,6 @@ export const registerUser = async (req, res, next) => {
   }
 
   try {
-    // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       const err = new Error("Email already in use");
@@ -68,7 +65,6 @@ export const registerUser = async (req, res, next) => {
       return next(err);
     }
 
-    // Validate all roles exist
     const existingRoles = await Role.find({ _id: { $in: finalRoleIds } });
     if (existingRoles.length !== finalRoleIds.length) {
       const err = new Error("One or more roles not found");
@@ -76,7 +72,6 @@ export const registerUser = async (req, res, next) => {
       return next(err);
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await User.create({
@@ -88,14 +83,12 @@ export const registerUser = async (req, res, next) => {
       status: "active",
     });
 
-    // ✅ NEW: If user is staff and has roles, auto-assign stuck "no_staff" items to ALL staff with those roles
+    //  AUTO-ASSIGN LOGIC (Updated to catch no_role too)
     if (finalUserType === "staff" && finalRoleIds.length > 0) {
-      // Find all items linked to the user's roles
       const linkedItems = await Item.find({ roles: { $in: finalRoleIds } }).select("_id");
       const linkedItemIds = linkedItems.map((i) => i._id);
 
       if (linkedItemIds.length > 0) {
-        // ✅ FIX: Find ALL active staff with these roles (not just the new user)
         const allStaffWithRole = await User.find({
           roles: { $in: finalRoleIds },
           userType: "staff",
@@ -105,18 +98,21 @@ export const registerUser = async (req, res, next) => {
         if (allStaffWithRole.length > 0) {
           const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-          // Update matching "no_staff" transactions to "pending" and assign to ALL staff
+          //  FIX: Check both no_role AND no_staff
           await ItemTransaction.updateMany(
-            { itemId: { $in: linkedItemIds }, status: "no_staff" },
+            {
+              itemId: { $in: linkedItemIds },
+              status: { $in: ["no_role", "no_staff"] }, // ← THE FIX
+            },
             {
               $set: {
                 status: "pending",
-                staffIds: allStaffIds, // ← Assign to ALL staff with the role
+                staffIds: allStaffIds,
               },
               $push: {
                 statusHistory: {
                   status: "pending",
-                  changedBy: req.user?.id || null, // Admin who registered the user (if available)
+                  changedBy: req.user?.id || null,
                   changedAt: new Date(),
                   reason: "Auto-assigned: All staff with role (new user registered)",
                 },
@@ -124,12 +120,12 @@ export const registerUser = async (req, res, next) => {
             },
           );
 
-          console.log(`🔄 Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
+          console.log(` Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members`);
         }
       }
     }
 
-    // Send Welcome Email to confirm email address is valid
+    // Send welcome email (non-blocking)
     try {
       await sendEmail({
         to: email,
@@ -143,10 +139,8 @@ export const registerUser = async (req, res, next) => {
           <p>Login URL: ${process.env.FRONTEND_URL}/login</p>
         `,
       });
-      console.log(`Welcome email sent to ${email}`);
     } catch (emailError) {
       console.error("Failed to send welcome email:", emailError);
-      // Do not fail the request, just log the error
     }
 
     const populatedUser = await User.findById(newUser._id).populate("roles", "name scope");
@@ -344,14 +338,14 @@ export const updateUserById = async (req, res, next) => {
       const oldRoleIds = user.roles.map((r) => r.toString());
       const addedRoleIds = finalRoleIds.filter((id) => !oldRoleIds.includes(id));
 
-      //  NEW: If new roles were added, auto-assign stuck "no_staff" items to ALL staff with those roles
+      //  NEW: If new roles were added, auto-assign stuck items to ALL staff with those roles
       if (addedRoleIds.length > 0) {
         // Find all items linked to the newly added roles
         const linkedItems = await Item.find({ roles: { $in: addedRoleIds } }).select("_id");
         const linkedItemIds = linkedItems.map((i) => i._id);
 
         if (linkedItemIds.length > 0) {
-          // ✅ FIX: Find ALL active staff with the newly added roles
+          //  FIX: Find ALL active staff with the newly added roles
           const allStaffWithRole = await User.find({
             roles: { $in: addedRoleIds },
             userType: "staff",
@@ -361,9 +355,12 @@ export const updateUserById = async (req, res, next) => {
           if (allStaffWithRole.length > 0) {
             const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-            // Update matching "no_staff" transactions to "pending" and assign to ALL staff
+            //  FIX: Check both no_role AND no_staff (catches stale transactions)
             await ItemTransaction.updateMany(
-              { itemId: { $in: linkedItemIds }, status: "no_staff" },
+              {
+                itemId: { $in: linkedItemIds },
+                status: { $in: ["no_role", "no_staff"] }, // ← THE ONE-LINE FIX
+              },
               {
                 $set: {
                   status: "pending",
@@ -380,7 +377,7 @@ export const updateUserById = async (req, res, next) => {
               },
             );
 
-            console.log(`🔄 Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
+            console.log(` Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
           }
         }
       }
@@ -529,14 +526,12 @@ export const unsuspendUser = async (req, res, next) => {
       return next(err);
     }
 
-    //  NEW: Before activating, auto-assign any "no_staff" items this user's roles can handle
+    // ✅ AUTO-ASSIGN LOGIC (Updated to catch no_role too)
     if (user.roles?.length > 0) {
-      // Find items linked to this user's roles
       const linkedItems = await Item.find({ roles: { $in: user.roles } }).select("_id");
       const linkedItemIds = linkedItems.map((i) => i._id);
 
       if (linkedItemIds.length > 0) {
-        // ✅ FIX: Find ALL active staff with these roles (not just this user)
         const allStaffWithRole = await User.find({
           roles: { $in: user.roles },
           userType: "staff",
@@ -546,18 +541,21 @@ export const unsuspendUser = async (req, res, next) => {
         if (allStaffWithRole.length > 0) {
           const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-          // Update matching "no_staff" transactions to "pending" and assign to ALL staff
+          // ✅ FIX: Check both no_role AND no_staff
           await ItemTransaction.updateMany(
-            { itemId: { $in: linkedItemIds }, status: "no_staff" },
+            {
+              itemId: { $in: linkedItemIds },
+              status: { $in: ["no_role", "no_staff"] }, // ← THE FIX
+            },
             {
               $set: {
                 status: "pending",
-                staffIds: allStaffIds, // ← Assign to ALL staff with the role
+                staffIds: allStaffIds,
               },
               $push: {
                 statusHistory: {
                   status: "pending",
-                  changedBy: req.user.id, // Admin who unsuspended
+                  changedBy: req.user.id,
                   changedAt: new Date(),
                   reason: "Auto-assigned: All staff with role (user unsuspended)",
                 },
@@ -565,12 +563,11 @@ export const unsuspendUser = async (req, res, next) => {
             },
           );
 
-          console.log(` Auto-assigned items to ${allStaffIds.length} staff members with matching roles`);
+          console.log(`🔄 Auto-assigned items to ${allStaffIds.length} staff members`);
         }
       }
     }
 
-    // Now activate the user
     user.status = "active";
     user.suspendedAt = null;
     await user.save();
