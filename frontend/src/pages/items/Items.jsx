@@ -1,18 +1,6 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import {
-  Plus,
-  Download,
-  MoreVertical,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Filter,
-  AlertTriangle,
-  X,
-  AlertCircle,
-  ArrowRight,
-} from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X, Info } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -62,18 +50,9 @@ function formatClassDisplay(classNames, scope, maxDisplay = 3) {
 // ─── Helper: Get class count text for mobile ─────────────────────────────────
 
 function getClassCountText(classNames, scope) {
-  if (scope === "global") {
-    return "All classes";
-  }
-
-  if (scope === "section") {
-    return "All classes in section";
-  }
-
-  if (classNames.length === 0) {
-    return "All classes";
-  }
-
+  if (scope === "global") return "All classes";
+  if (scope === "section") return "All classes in section";
+  if (classNames.length === 0) return "All classes";
   return `${classNames.length} class${classNames.length > 1 ? "es" : ""}`;
 }
 
@@ -81,24 +60,9 @@ function getClassCountText(classNames, scope) {
 
 function ScopeBadge({ scope }) {
   const config = {
-    global: {
-      bg: "bg-blue-50",
-      text: "text-blue-700",
-      border: "border-blue-200",
-      label: "School-Wide",
-    },
-    section: {
-      bg: "bg-orange-50",
-      text: "text-orange-700",
-      border: "border-orange-200",
-      label: "By Section",
-    },
-    class: {
-      bg: "bg-purple-50",
-      text: "text-purple-700",
-      border: "border-purple-200",
-      label: "By Class",
-    },
+    global: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", label: "School-Wide" },
+    section: { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", label: "By Section" },
+    class: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", label: "By Class" },
   };
 
   const style = config[scope];
@@ -123,6 +87,50 @@ function CompulsoryBadge({ value }) {
     <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
       Optional
     </span>
+  );
+}
+
+// ─── Admin Workflow Reminder Banner ──────────────────────────────────────────
+
+function AdminWorkflowReminder({ onDismiss }) {
+  return (
+    <div className="flex items-start gap-3 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-lg">
+      <div className="shrink-0 mt-0.5">
+        <Info size={16} className="text-amber-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-amber-900 mb-1">Admin Reminder: Complete Item Setup</p>
+        <p className="text-[11px] text-amber-800 leading-relaxed">After creating an item, make sure to:</p>
+        <ol className="mt-1.5 space-y-1 list-none">
+          <li className="flex items-start gap-1.5 text-[11px] text-amber-800">
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-bold text-[9px] shrink-0 mt-0.5">
+              1
+            </span>
+            <span>
+              Go to <span className="font-bold text-amber-900">Roles</span> and assign the new item to a role.
+            </span>
+          </li>
+          <li className="flex items-start gap-1.5 text-[11px] text-amber-800">
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-bold text-[9px] shrink-0 mt-0.5">
+              2
+            </span>
+            <span>
+              Go to <span className="font-bold text-amber-900">Users</span> and assign a staff member to that role.
+            </span>
+          </li>
+        </ol>
+        <p className="mt-2 text-[10px] text-amber-700 bg-amber-100 border border-amber-200 rounded px-2 py-1">
+          ⚠ Item transactions will get stuck if no staff member is assigned to a role that handles the item.
+        </p>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-100 rounded transition-colors"
+        aria-label="Dismiss reminder"
+      >
+        <X size={13} />
+      </button>
+    </div>
   );
 }
 
@@ -184,12 +192,11 @@ function DeleteConfirmationModal({ open, onOpenChange, itemName, onConfirm, isDe
   );
 }
 
-// ─── Enhanced Skeleton Loader with Meaningful Message & Motion ──────────────
+// ─── Enhanced Skeleton Loader ────────────────────────────────────────────────
 
 function ItemsSkeleton() {
   return (
     <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 animate-in fade-in duration-500">
-      {/* Header with spinner and message */}
       <div className="text-center sm:text-left space-y-2">
         <div className="flex justify-center sm:justify-start items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#136dec] border-t-transparent" />
@@ -197,8 +204,6 @@ function ItemsSkeleton() {
         </div>
         <p className="text-sm text-slate-400">Fetching fee structures and configurations, please wait.</p>
       </div>
-
-      {/* Skeleton for action buttons and search */}
       <div className="flex justify-between items-start gap-3">
         <div className="flex-1">
           <div className="h-6 w-48 bg-slate-200 rounded mb-2 animate-pulse" />
@@ -209,18 +214,12 @@ function ItemsSkeleton() {
           <div className="h-9 w-28 bg-slate-200 rounded animate-pulse" />
         </div>
       </div>
-
-      {/* Search bar skeleton */}
       <div className="h-9 bg-slate-200 rounded-lg animate-pulse" />
-
-      {/* Tabs skeleton */}
       <div className="flex gap-4 mb-4">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="h-10 w-24 bg-slate-200 rounded animate-pulse" />
         ))}
       </div>
-
-      {/* Table rows skeleton with stagger */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 space-y-4">
           {[...Array(5)].map((_, i) => (
@@ -235,14 +234,12 @@ function ItemsSkeleton() {
           ))}
         </div>
       </div>
-
-      {/* Subtle footer note */}
       <p className="text-center text-xs text-slate-400 animate-pulse">Preparing your fee items dashboard...</p>
     </div>
   );
 }
 
-// ─── Items ───────────────────────────────────────────────────────────────────
+// ─── Items ────────────────────────────────────────────────────────────────────
 
 export default function Items() {
   // ─── Data State ────────────────────────────────────────────────────────────
@@ -264,33 +261,31 @@ export default function Items() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ✅ ADDED: For reading ?id= parameter from Configuration page
+  // ─── Workflow Reminder Banner State ───────────────────────────────────────
+  const [showWorkflowReminder, setShowWorkflowReminder] = useState(true);
+
+  // ✅ For reading ?id= parameter from Configuration page
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   // ─── Load Items on Mount ───────────────────────────────────────────────────
   useEffect(() => {
     loadItems();
   }, []);
 
-  // ✅ ADDED: Highlight item when ?id= parameter is present
+  // ✅ Highlight item when ?id= parameter is present
   useEffect(() => {
     const highlightId = searchParams.get("id");
     if (highlightId) {
-      // Wait briefly for items to render, then highlight
       const timer = setTimeout(() => {
         const row = document.querySelector(`[data-item-id="${highlightId}"]`);
         if (row) {
-          // Scroll to item
           row.scrollIntoView({ behavior: "smooth", block: "center" });
-          // Add highlight styles
           row.classList.add("ring-2", "ring-[#136dec]", "bg-[#136dec]/5", "transition-all");
-          // Remove highlight after 3 seconds
           setTimeout(() => {
             row.classList.remove("ring-2", "ring-[#136dec]", "bg-[#136dec]/5");
           }, 3000);
         }
-      }, 300); // Small delay to ensure DOM is ready
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [searchParams]);
@@ -317,6 +312,8 @@ export default function Items() {
       await loadItems();
       toast.success("Item created successfully");
       setModalOpen(false);
+      // Re-show the workflow reminder after a new item is created
+      setShowWorkflowReminder(true);
     } catch (error) {
       console.error("Failed to create item:", error);
       toast.error(error.response?.data?.message || "Failed to create item");
@@ -345,7 +342,6 @@ export default function Items() {
 
   const handleDeleteItem = async () => {
     if (!itemToDelete) return;
-
     try {
       setIsDeleting(true);
       await deleteItem(itemToDelete._id);
@@ -366,7 +362,7 @@ export default function Items() {
     setModalOpen(true);
   };
 
-  // ─── PDF Export Function ───────────────────────────────────────────────────
+  // ─── PDF Export ────────────────────────────────────────────────────────────
 
   const handleExportPDF = () => {
     if (!items.length) {
@@ -380,26 +376,22 @@ export default function Items() {
     const margin = 15;
     const contentW = pageW - margin * 2;
 
-    // ── Color Palette ─────────────────────────────────────────────────────
-    const PRIMARY = [19, 109, 236]; // #136dec
+    const PRIMARY = [19, 109, 236];
     const PRIMARY_DARK = [12, 85, 180];
     const PRIMARY_LIGHT = [235, 244, 255];
     const SUCCESS = [22, 163, 74];
-    const OPTIONAL = [100, 116, 139]; // slate-500
+    const OPTIONAL = [100, 116, 139];
     const SLATE_900 = [15, 23, 42];
-    const SLATE_600 = [71, 85, 105];
     const SLATE_400 = [148, 163, 184];
     const SLATE_200 = [226, 232, 240];
     const SLATE_50 = [248, 250, 252];
     const WHITE = [255, 255, 255];
 
-    // ── Helpers ───────────────────────────────────────────────────────────
     const filledRect = (x, y, w, h, r, color) => {
       doc.setFillColor(...color);
       doc.roundedRect(x, y, w, h, r, r, "F");
     };
 
-    // ✅ Use "NGN" instead of "₦" to avoid encoding issues in PDF
     const formatCurrencyPDF = (amt) => {
       const num = typeof amt === "number" ? amt : 0;
       return `NGN ${num.toLocaleString()}`;
@@ -418,22 +410,17 @@ export default function Items() {
       }
     };
 
-    // ── HEADER ────────────────────────────────────────────────────────────
     filledRect(0, 0, pageW, 45, 0, PRIMARY_DARK);
-
     doc
       .setFontSize(18)
       .setFont("helvetica", "bold")
       .setTextColor(...WHITE)
       .text("Primary Colours School", margin, 20);
-
     doc.setFontSize(11).setFont("helvetica", "normal").setTextColor(220, 235, 255).text("Fees & Items Master List", margin, 28);
-
     doc.setFontSize(7).setTextColor(220, 235, 255);
     doc.text(`Generated: ${new Date().toLocaleString("en-NG")}`, pageW - margin, 20, { align: "right" });
     doc.text(`Total Items: ${items.length}`, pageW - margin, 27, { align: "right" });
 
-    // Filter summary bar
     filledRect(margin, 38, contentW, 12, 2, PRIMARY_LIGHT);
     doc
       .setFontSize(7)
@@ -443,17 +430,13 @@ export default function Items() {
     let filterParts = [];
     if (activeTab !== "all") filterParts.push(`📋 ${TABS.find((t) => t.key === activeTab)?.label}`);
     if (search.trim()) filterParts.push(`🔍 "${search}"`);
-
     doc.text(filterParts.length > 0 ? `Filters: ${filterParts.join("  •  ")}` : "Filters: None", margin + 4, 45.5);
-
     doc
       .setDrawColor(...SLATE_200)
       .setLineWidth(0.3)
       .line(0, 52, pageW, 52);
 
-    // ── TABLE SETUP ───────────────────────────────────────────────────────
     const tableStartY = 60;
-
     const columns = [
       { header: "Item Name", dataKey: "name", width: 45, align: "left" },
       { header: "Scope", dataKey: "scope", width: 22, align: "center" },
@@ -475,7 +458,6 @@ export default function Items() {
       };
     });
 
-    // ── AUTO TABLE ────────────────────────────────────────────────────────
     autoTable(doc, {
       startY: tableStartY,
       head: [columns.map((col) => col.header)],
@@ -490,31 +472,15 @@ export default function Items() {
         lineWidth: 0,
         halign: "center",
       },
-      bodyStyles: {
-        fontSize: 7,
-        cellPadding: 3,
-        textColor: SLATE_900,
-        lineWidth: 0.1,
-        lineColor: SLATE_200,
-      },
-      alternateRowStyles: {
-        fillColor: SLATE_50,
-      },
+      bodyStyles: { fontSize: 7, cellPadding: 3, textColor: SLATE_900, lineWidth: 0.1, lineColor: SLATE_200 },
+      alternateRowStyles: { fillColor: SLATE_50 },
       columnStyles: columns.reduce((acc, col, idx) => {
-        acc[idx] = {
-          cellWidth: col.width,
-          halign: col.align,
-          fontStyle: idx === 0 ? "bold" : "normal", // Item name bold
-        };
+        acc[idx] = { cellWidth: col.width, halign: col.align, fontStyle: idx === 0 ? "bold" : "normal" };
         return acc;
       }, {}),
-      styles: {
-        overflow: "linebreak",
-        halign: "left",
-      },
+      styles: { overflow: "linebreak", halign: "left" },
       margin: { left: margin, right: margin },
       didParseCell: (hookData) => {
-        // Color-code Type column
         if (hookData.column.index === 5 && hookData.section === "body") {
           const typeText = hookData.cell.raw;
           if (typeText === "Required") {
@@ -524,25 +490,21 @@ export default function Items() {
             hookData.cell.styles.textColor = OPTIONAL;
           }
         }
-        // Right-align prices
         if (hookData.column.index === 4) {
           hookData.cell.styles.halign = "right";
           hookData.cell.styles.fontStyle = "bold";
         }
       },
       didDrawPage: (data) => {
-        // Footer on every page
         const footerY = pageH - 15;
         doc
           .setDrawColor(...SLATE_400)
           .setLineWidth(0.2)
           .line(margin, footerY, pageW - margin, footerY);
-
         doc
           .setFontSize(6)
           .setFont("helvetica", "normal")
           .setTextColor(...SLATE_400);
-
         doc.text("Primary Colours School • Confidential", margin, footerY + 5);
         doc.text(`Page ${data.pageNumber} of ${data.pageCount}`, pageW - margin, footerY + 5, { align: "right" });
       },
@@ -564,16 +526,16 @@ export default function Items() {
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Show meaningful loading state while fetching data
-  if (loading) {
-    return <ItemsSkeleton />;
-  }
+  if (loading) return <ItemsSkeleton />;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <>
       <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 animate-in fade-in duration-500">
+        {/* ── Admin Workflow Reminder Banner ──────────────────────────────────── */}
+        {showWorkflowReminder && <AdminWorkflowReminder onDismiss={() => setShowWorkflowReminder(false)} />}
+
         {/* ── Page header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -581,7 +543,6 @@ export default function Items() {
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage fees, levies, and items across the school.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {/* ✅ Export PDF Button */}
             <button
               onClick={handleExportPDF}
               className="h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
@@ -599,40 +560,6 @@ export default function Items() {
               <Plus size={14} />
               <span className="hidden sm:inline">Add Item</span>
             </button>
-          </div>
-        </div>
-
-        {/* ✅ NEW: IMPORTANT NOTICE BANNER - Remind admins to assign items to roles */}
-        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-amber-900 mb-1">⚠️ Important: Prevent Stuck Transactions</h3>
-              <p className="text-xs text-amber-800 mb-2">
-                After creating or editing an item, you <strong>must</strong> complete these steps to prevent payment transactions from
-                getting stuck:
-              </p>
-              <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
-                <li>
-                  Go to{" "}
-                  <button onClick={() => navigate("/roles")} className="underline font-bold hover:text-amber-900">
-                    Roles page
-                  </button>{" "}
-                  and assign this item to a role
-                </li>
-                <li>
-                  Go to{" "}
-                  <button onClick={() => navigate("/users")} className="underline font-bold hover:text-amber-900">
-                    Users page
-                  </button>{" "}
-                  and assign staff to that role
-                </li>
-              </ol>
-              <p className="text-xs text-amber-700 mt-2 italic">
-                Without these steps, items will have no staff assigned and transactions will remain stuck with status "no_role" or
-                "no_staff".
-              </p>
-            </div>
           </div>
         </div>
 
@@ -681,36 +608,22 @@ export default function Items() {
             ) : (
               paginatedItems.map((item) => {
                 const classCountText = getClassCountText(item.classNames, item.scope);
-
                 return (
-                  // ✅ ADDED: data-item-id attribute for highlight logic
                   <div key={item._id} data-item-id={item._id} className="p-3">
-                    {/* Top row: Name + Price */}
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="text-sm font-bold text-slate-900 truncate flex-1">{item.name}</p>
                       <span className="text-sm font-bold text-slate-900 whitespace-nowrap">₦{item.price.toLocaleString()}</span>
                     </div>
-
-                    {/* Middle row: Scope + Compulsory */}
                     <div className="flex items-center gap-2 mb-2">
                       <ScopeBadge scope={item.scope} />
                       <CompulsoryBadge value={item.compulsory} />
                     </div>
-
-                    {/* Bottom row: Section + Class Count */}
                     <p className="text-[10px] text-slate-500 mb-2.5">
                       {item.sectionName} · {classCountText}
                     </p>
-
-                    {/* Divider + Actions */}
                     <div className="flex items-center justify-between pt-2.5 border-t border-slate-100">
                       <span className="text-[10px] text-slate-400">
-                        {item.createdAt
-                          ? new Date(item.createdAt).toLocaleDateString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                            })
-                          : ""}
+                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}
                       </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -761,9 +674,7 @@ export default function Items() {
                 ) : (
                   paginatedItems.map((item) => {
                     const classDisplay = formatClassDisplay(item.classNames, item.scope);
-
                     return (
-                      // ✅ ADDED: data-item-id attribute for highlight logic
                       <tr key={item._id} data-item-id={item._id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-4 lg:px-5 py-3.5">
                           <span className="text-sm font-bold text-slate-900">{item.name}</span>
@@ -848,7 +759,7 @@ export default function Items() {
           )}
         </div>
 
-        {/* ── Scope Legend (Helper for Admin) ─────────────────────────────────── */}
+        {/* ── Scope Legend ─────────────────────────────────────────────────────── */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
           <p className="text-xs font-bold text-blue-900 mb-2">Scope Guide</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
