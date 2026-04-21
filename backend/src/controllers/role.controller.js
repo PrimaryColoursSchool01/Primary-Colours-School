@@ -3,7 +3,7 @@ import Role from "../models/role.model.js";
 import User from "../models/user.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
 
-//  Helper: Auto-assign stuck transactions when role items change
+// ✅ Helper: Auto-assign stuck transactions when role items change
 const autoAssignStuckTransactions = async (role, changedBy) => {
   if (!role.itemIds?.length) return;
 
@@ -18,10 +18,13 @@ const autoAssignStuckTransactions = async (role, changedBy) => {
 
   const staffIds = staffWithRole.map((s) => s._id);
 
+  //  FIX: Use role.itemIds directly (no need to query Item collection)
+  const linkedItemIds = role.itemIds;
+
   // Update stuck transactions for these items
   const result = await ItemTransaction.updateMany(
     {
-      itemId: { $in: role.itemIds },
+      itemId: { $in: linkedItemIds },
       status: { $in: ["no_role", "no_staff"] },
     },
     {
@@ -41,7 +44,7 @@ const autoAssignStuckTransactions = async (role, changedBy) => {
   );
 
   if (result.modifiedCount > 0) {
-    console.log(` Auto-assigned ${result.modifiedCount} transactions for role "${role.name}" to ${staffIds.length} staff members`);
+    console.log(`🔄 Auto-assigned ${result.modifiedCount} transactions for role "${role.name}" to ${staffIds.length} staff members`);
   }
 };
 
@@ -128,7 +131,7 @@ export const createRole = async (req, res, next) => {
       itemIds,
     });
 
-    //  NEW: Auto-assign stuck transactions for this role
+    // ✅ NEW: Auto-assign stuck transactions for this role
     await autoAssignStuckTransactions(newRole, req.user?.id);
 
     return res.status(201).json({ message: "Role created successfully", role: newRole });
@@ -264,7 +267,7 @@ export const updateRoleById = async (req, res, next) => {
       .populate("classIds", "name")
       .populate("itemIds", "name");
 
-    //  NEW: If itemIds changed, auto-assign stuck transactions
+    // ✅ NEW: If itemIds changed, auto-assign stuck transactions
     if (itemIds !== undefined) {
       await autoAssignStuckTransactions(updatedRole, req.user?.id);
     }
@@ -287,10 +290,8 @@ export const deleteRoleById = async (req, res, next) => {
   }
 
   try {
-    //  Count affected users first
     const affectedUsers = await User.countDocuments({ roles: id });
 
-    //  Delete the role
     const deletedRole = await Role.findByIdAndDelete(id);
 
     if (!deletedRole) {
@@ -299,7 +300,6 @@ export const deleteRoleById = async (req, res, next) => {
       return next(err);
     }
 
-    //  Remove role from all users (DON'T delete users!)
     await User.updateMany({ roles: id }, { $pull: { roles: id } });
 
     return res.status(200).json({
@@ -314,7 +314,6 @@ export const deleteRoleById = async (req, res, next) => {
   }
 };
 
-//  NEW: Get role dependencies (for delete warning)
 export const getRoleDependencies = async (req, res, next) => {
   const { id } = req.params;
 

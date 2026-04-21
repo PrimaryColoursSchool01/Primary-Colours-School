@@ -3,7 +3,6 @@ import bcrypt from "bcrypt";
 import User from "../models/user.model.js";
 import Role from "../models/role.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
-import Item from "../models/items-fess.model.js";
 import { sendEmail } from "../utils/sendEmail.js";
 
 export const registerUser = async (req, res, next) => {
@@ -83,10 +82,13 @@ export const registerUser = async (req, res, next) => {
       status: "active",
     });
 
-    //  AUTO-ASSIGN LOGIC (Updated to catch no_role too)
+    // ✅ AUTO-ASSIGN LOGIC (Fixed: Query Role collection for itemIds)
     if (finalUserType === "staff" && finalRoleIds.length > 0) {
-      const linkedItems = await Item.find({ roles: { $in: finalRoleIds } }).select("_id");
-      const linkedItemIds = linkedItems.map((i) => i._id);
+      // ✅ FIX: Query Role collection to get itemIds (not Item collection)
+      const roles = await Role.find({ _id: { $in: finalRoleIds } })
+        .select("itemIds")
+        .lean();
+      const linkedItemIds = roles.flatMap((role) => role.itemIds || []);
 
       if (linkedItemIds.length > 0) {
         const allStaffWithRole = await User.find({
@@ -98,11 +100,11 @@ export const registerUser = async (req, res, next) => {
         if (allStaffWithRole.length > 0) {
           const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-          //  FIX: Check both no_role AND no_staff
+          // ✅ FIX: Check both no_role AND no_staff
           await ItemTransaction.updateMany(
             {
               itemId: { $in: linkedItemIds },
-              status: { $in: ["no_role", "no_staff"] }, // ← THE FIX
+              status: { $in: ["no_role", "no_staff"] },
             },
             {
               $set: {
@@ -120,7 +122,7 @@ export const registerUser = async (req, res, next) => {
             },
           );
 
-          console.log(` Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members`);
+          console.log(`🔄 Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members`);
         }
       }
     }
@@ -167,7 +169,6 @@ export const getAllUsers = async (req, res, next) => {
   try {
     const { userType, status, search, page = 1, limit = 10 } = req.query;
 
-    // Build filter
     const filter = {};
 
     if (userType && ["admin", "staff"].includes(userType)) {
@@ -182,7 +183,6 @@ export const getAllUsers = async (req, res, next) => {
       filter.$or = [{ fullName: { $regex: search, $options: "i" } }, { email: { $regex: search, $options: "i" } }];
     }
 
-    // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const users = await User.find(filter)
@@ -267,7 +267,6 @@ export const updateUserById = async (req, res, next) => {
       return next(err);
     }
 
-    // Update full name
     if (fullName !== undefined) {
       if (!fullName.trim()) {
         const err = new Error("Full name cannot be empty");
@@ -277,7 +276,6 @@ export const updateUserById = async (req, res, next) => {
       user.fullName = fullName.trim();
     }
 
-    // Update email
     if (email !== undefined) {
       if (!email.trim()) {
         const err = new Error("Email cannot be empty");
@@ -285,7 +283,6 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
-      // Check if email is already taken by another user
       const existingUser = await User.findOne({ email: email.trim(), _id: { $ne: id } });
       if (existingUser) {
         const err = new Error("Email already in use");
@@ -293,11 +290,9 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
-      // Store old email for notification
       const oldEmail = user.email;
       user.email = email.trim();
 
-      // Send email change notification to the new email
       try {
         await sendEmail({
           to: email.trim(),
@@ -313,7 +308,6 @@ export const updateUserById = async (req, res, next) => {
       }
     }
 
-    // Update roles
     if (roleIds !== undefined) {
       let finalRoleIds = roleIds;
       if (!Array.isArray(finalRoleIds)) {
@@ -326,7 +320,6 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
-      // Validate all roles exist
       const existingRoles = await Role.find({ _id: { $in: finalRoleIds } });
       if (existingRoles.length !== finalRoleIds.length) {
         const err = new Error("One or more roles not found");
@@ -334,18 +327,18 @@ export const updateUserById = async (req, res, next) => {
         return next(err);
       }
 
-      //  NEW: Detect which roles are being ADDED
       const oldRoleIds = user.roles.map((r) => r.toString());
       const addedRoleIds = finalRoleIds.filter((id) => !oldRoleIds.includes(id));
 
-      //  NEW: If new roles were added, auto-assign stuck items to ALL staff with those roles
+      // ✅ FIX: If new roles were added, auto-assign stuck items (query Role collection)
       if (addedRoleIds.length > 0) {
-        // Find all items linked to the newly added roles
-        const linkedItems = await Item.find({ roles: { $in: addedRoleIds } }).select("_id");
-        const linkedItemIds = linkedItems.map((i) => i._id);
+        // ✅ FIX: Query Role collection to get itemIds
+        const roles = await Role.find({ _id: { $in: addedRoleIds } })
+          .select("itemIds")
+          .lean();
+        const linkedItemIds = roles.flatMap((role) => role.itemIds || []);
 
         if (linkedItemIds.length > 0) {
-          //  FIX: Find ALL active staff with the newly added roles
           const allStaffWithRole = await User.find({
             roles: { $in: addedRoleIds },
             userType: "staff",
@@ -355,21 +348,20 @@ export const updateUserById = async (req, res, next) => {
           if (allStaffWithRole.length > 0) {
             const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-            //  FIX: Check both no_role AND no_staff (catches stale transactions)
             await ItemTransaction.updateMany(
               {
                 itemId: { $in: linkedItemIds },
-                status: { $in: ["no_role", "no_staff"] }, // ← THE ONE-LINE FIX
+                status: { $in: ["no_role", "no_staff"] },
               },
               {
                 $set: {
                   status: "pending",
-                  staffIds: allStaffIds, // ← Assign to ALL staff with the role
+                  staffIds: allStaffIds,
                 },
                 $push: {
                   statusHistory: {
                     status: "pending",
-                    changedBy: req.user.id, // Admin who made the change
+                    changedBy: req.user.id,
                     changedAt: new Date(),
                     reason: "Auto-assigned: All staff with new role",
                   },
@@ -377,16 +369,16 @@ export const updateUserById = async (req, res, next) => {
               },
             );
 
-            console.log(` Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
+            console.log(`🔄 Auto-assigned ${linkedItemIds.length} items to ${allStaffIds.length} staff members with matching roles`);
           }
         }
       }
 
-      // ── Existing logic: Remove user from items no longer in their roles ──
+      // Existing logic: Remove user from items no longer in their roles
       const newRoleItemIds = await Role.find({ _id: { $in: finalRoleIds } }).distinct("itemIds");
       const userItemTransactions = await ItemTransaction.find({
         staffIds: user._id,
-        status: { $in: ["pending", "no_staff", "no_role"] }, //  Include new statuses
+        status: { $in: ["pending", "no_staff", "no_role"] },
       });
 
       const itemTransactionsToRemoveUser = userItemTransactions.filter(
@@ -397,7 +389,6 @@ export const updateUserById = async (req, res, next) => {
         const transactionIds = itemTransactionsToRemoveUser.map((t) => t._id);
         await ItemTransaction.updateMany({ _id: { $in: transactionIds } }, { $pull: { staffIds: user._id } });
 
-        // Mark item transactions with no staff left as no_staff (not generic unassigned)
         await ItemTransaction.updateMany(
           { _id: { $in: transactionIds }, staffIds: { $size: 0 } },
           {
@@ -417,7 +408,6 @@ export const updateUserById = async (req, res, next) => {
       user.roles = finalRoleIds;
     }
 
-    // Update status
     if (status !== undefined) {
       if (!["active", "suspended"].includes(status)) {
         const err = new Error("Invalid status");
@@ -426,12 +416,10 @@ export const updateUserById = async (req, res, next) => {
       }
       user.status = status;
 
-      // Set suspendedAt if suspending
       if (status === "suspended" && !user.suspendedAt) {
         user.suspendedAt = new Date();
       }
 
-      // Clear suspendedAt if unsuspended
       if (status === "active" && user.suspendedAt) {
         user.suspendedAt = null;
       }
@@ -526,10 +514,13 @@ export const unsuspendUser = async (req, res, next) => {
       return next(err);
     }
 
-    // ✅ AUTO-ASSIGN LOGIC (Updated to catch no_role too)
+    // ✅ AUTO-ASSIGN LOGIC (Fixed: Query Role collection for itemIds)
     if (user.roles?.length > 0) {
-      const linkedItems = await Item.find({ roles: { $in: user.roles } }).select("_id");
-      const linkedItemIds = linkedItems.map((i) => i._id);
+      // ✅ FIX: Query Role collection to get itemIds
+      const roles = await Role.find({ _id: { $in: user.roles } })
+        .select("itemIds")
+        .lean();
+      const linkedItemIds = roles.flatMap((role) => role.itemIds || []);
 
       if (linkedItemIds.length > 0) {
         const allStaffWithRole = await User.find({
@@ -541,11 +532,10 @@ export const unsuspendUser = async (req, res, next) => {
         if (allStaffWithRole.length > 0) {
           const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-          // ✅ FIX: Check both no_role AND no_staff
           await ItemTransaction.updateMany(
             {
               itemId: { $in: linkedItemIds },
-              status: { $in: ["no_role", "no_staff"] }, // ← THE FIX
+              status: { $in: ["no_role", "no_staff"] },
             },
             {
               $set: {
@@ -605,7 +595,6 @@ export const deleteUserById = async (req, res, next) => {
       return next(err);
     }
 
-    // Prevent deleting last admin
     if (user.userType === "admin") {
       const adminCount = await User.countDocuments({ userType: "admin", _id: { $ne: id } });
       if (adminCount === 0) {
@@ -617,10 +606,8 @@ export const deleteUserById = async (req, res, next) => {
 
     const deletedUser = await User.findByIdAndDelete(id);
 
-    // Pull deleted user from all item transactions
     await ItemTransaction.updateMany({ staffIds: id }, { $pull: { staffIds: id } });
 
-    //  CHANGE: Mark item transactions with no staff left as no_staff (handles new statuses)
     await ItemTransaction.updateMany(
       { staffIds: { $size: 0 }, status: { $in: ["pending", "no_staff", "no_role"] } },
       { $set: { status: "no_staff" } },
@@ -673,10 +660,9 @@ export const resetPassword = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
-    user.tokenVersion += 1; // Invalidate existing sessions
+    user.tokenVersion += 1;
     await user.save();
 
-    // Send password reset notification to user
     try {
       await sendEmail({
         to: user.email,
