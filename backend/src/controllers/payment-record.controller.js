@@ -23,7 +23,7 @@ export const createPaymentRecord = async (req, res, next) => {
     paymentEvidenceText,
   } = req.body;
 
-  // ✅ FIX 1: Parse items if it's a JSON string (from FormData)
+  //  FIX 1: Parse items if it's a JSON string (from FormData)
   let parsedItems = items;
   if (typeof items === "string") {
     try {
@@ -35,7 +35,7 @@ export const createPaymentRecord = async (req, res, next) => {
     }
   }
 
-  // ✅ FIX 2: Ensure quantities are numbers (FormData sends strings)
+  //  FIX 2: Ensure quantities are numbers (FormData sends strings)
   parsedItems = parsedItems.map((item) => ({
     ...item,
     quantity: Number(item.quantity),

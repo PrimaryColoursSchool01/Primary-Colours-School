@@ -86,9 +86,9 @@ export const registerUser = async (req, res, next) => {
       status: "active",
     });
 
-    // ✅ AUTO-ASSIGN LOGIC (Fixed: Query Role collection for itemIds)
+    // AUTO-ASSIGN LOGIC (Fixed: Query Role collection for itemIds)
     if (finalUserType === "staff" && finalRoleIds.length > 0) {
-      // ✅ FIX: Query Role collection to get itemIds (not Item collection)
+      // FIX: Query Role collection to get itemIds (not Item collection)
       const roles = await Role.find({ _id: { $in: finalRoleIds } })
         .select("itemIds")
         .lean();
@@ -104,7 +104,7 @@ export const registerUser = async (req, res, next) => {
         if (allStaffWithRole.length > 0) {
           const allStaffIds = allStaffWithRole.map((s) => s._id);
 
-          // ✅ FIX: Check both no_role AND no_staff
+          // FIX: Check both no_role AND no_staff
           await ItemTransaction.updateMany(
             {
               itemId: { $in: linkedItemIds },
@@ -334,7 +334,7 @@ export const updateUserById = async (req, res, next) => {
       const oldRoleIds = user.roles.map((r) => r.toString());
       const addedRoleIds = finalRoleIds.filter((rid) => !oldRoleIds.includes(rid));
 
-      // ✅ FIXED: Include current user in staff query since their roles aren't saved yet
+      // FIXED: Include current user in staff query since their roles aren't saved yet
       if (addedRoleIds.length > 0) {
         const roles = await Role.find({ _id: { $in: addedRoleIds } })
           .select("itemIds")
@@ -348,7 +348,7 @@ export const updateUserById = async (req, res, next) => {
             status: "active",
           }).select("_id");
 
-          // ✅ FIX: Merge existing staff + current user (not yet persisted)
+          // FIX: Merge existing staff + current user (not yet persisted)
           const staffIdMap = new Map(existingStaffWithRole.map((s) => [s._id.toString(), s._id]));
           if (user.userType === "staff" && user.status === "active") {
             staffIdMap.set(user._id.toString(), user._id);
@@ -522,9 +522,9 @@ export const unsuspendUser = async (req, res, next) => {
       return next(err);
     }
 
-    // ✅ AUTO-ASSIGN LOGIC (Fixed: Query Role collection for itemIds)
+    // AUTO-ASSIGN LOGIC (Fixed: Query Role collection for itemIds)
     if (user.roles?.length > 0) {
-      // ✅ FIX: Query Role collection to get itemIds
+      // FIX: Query Role collection to get itemIds
       const roles = await Role.find({ _id: { $in: user.roles } })
         .select("itemIds")
         .lean();

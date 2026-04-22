@@ -27,7 +27,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
     setValue,
     watch,
     reset,
-    unregister, // ✅ imported
+    unregister, // imported
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -41,7 +41,7 @@ export default function UserModal({ open, onOpenChange, mode, user, roles, onSuc
   useEffect(() => {
     if (open) {
       if (isEdit && user) {
-        // ✅ THE FIX: explicitly drop the password field and its validation rules
+        // THE FIX: explicitly drop the password field and its validation rules
         // shadcn Dialog keeps children always mounted, so shouldUnregister never fires
         unregister("password");
 

@@ -115,7 +115,7 @@ export const deleteSectionById = async (req, res, next) => {
       return next(err);
     }
 
-    // HARD BLOCK 1: payment records in classes under this section
+    //  HARD BLOCK 1: payment records in classes under this section
     const classes = await Class.find({ sectionId: id });
     const classIds = classes.map((c) => c._id);
 
@@ -130,7 +130,8 @@ export const deleteSectionById = async (req, res, next) => {
       }
     }
 
-    // HARD BLOCK 2: transactions on items scoped to this section
+    //  HARD BLOCK 2: transactions on items scoped to this section
+    //  REUSE sectionItems — no need to query again later
     const sectionItems = await Item.find({ sectionId: id });
     const sectionItemIds = sectionItems.map((i) => i._id);
 
@@ -145,19 +146,27 @@ export const deleteSectionById = async (req, res, next) => {
       }
     }
 
-    // Perform deletion of section and its children
+    // ── All checks passed — safe to delete ──────────────────────
+
     await Section.findByIdAndDelete(id);
     await Class.deleteMany({ sectionId: id });
 
-    // --- Items to be deleted (section-scoped) ---
-    const itemsToDelete = await Item.find({ sectionId: id });
-    const deletedItemIds = itemsToDelete.map((item) => item._id.toString());
+    //  FIX: Clean up stale sectionId and classIds on roles
+    await Role.updateMany(
+      { sectionId: id },
+      {
+        $unset: { sectionId: "" },
+        $pull: { classIds: { $in: classIds } },
+      },
+    );
+
+    //  REUSE sectionItemIds from above — no redundant query
+    const deletedItemIds = sectionItemIds;
 
     await Item.deleteMany({ sectionId: id });
 
-    // --- NEW: Clean up roles that referenced the deleted items ---
+    // Clean up roles that referenced the deleted items
     if (deletedItemIds.length > 0) {
-      // Remove item references from roles
       await Role.updateMany({ itemIds: { $in: deletedItemIds } }, { $pull: { itemIds: { $in: deletedItemIds } } });
 
       // Find roles that are now completely empty
@@ -165,9 +174,7 @@ export const deleteSectionById = async (req, res, next) => {
       const emptyRoleIds = emptyRoles.map((r) => r._id);
 
       if (emptyRoleIds.length > 0) {
-        // Remove empty roles from users
         await User.updateMany({ roles: { $in: emptyRoleIds } }, { $pull: { roles: { $in: emptyRoleIds } } });
-        // Delete the empty roles
         await Role.deleteMany({ _id: { $in: emptyRoleIds } });
       }
     }

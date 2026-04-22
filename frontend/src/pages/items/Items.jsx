@@ -264,7 +264,7 @@ export default function Items() {
   // ─── Workflow Reminder Banner State ───────────────────────────────────────
   const [showWorkflowReminder, setShowWorkflowReminder] = useState(true);
 
-  // ✅ For reading ?id= parameter from Configuration page
+  // For reading ?id= parameter from Configuration page
   const [searchParams] = useSearchParams();
 
   // ─── Load Items on Mount ───────────────────────────────────────────────────
@@ -272,7 +272,7 @@ export default function Items() {
     loadItems();
   }, []);
 
-  // ✅ Highlight item when ?id= parameter is present
+  // Highlight item when ?id= parameter is present
   useEffect(() => {
     const highlightId = searchParams.get("id");
     if (highlightId) {

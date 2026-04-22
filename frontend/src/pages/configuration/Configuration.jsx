@@ -183,7 +183,7 @@ export default function Configuration() {
             </span>
           </div>
 
-          {/* ✅ NEW: Helper note pointing to Users page */}
+          {/* NEW: Helper note pointing to Users page */}
           <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 text-xs text-orange-700">
             💡 These items have roles assigned, but those roles have no active staff.{" "}
             <button onClick={() => navigate("/users")} className="underline ml-1 font-medium hover:text-orange-900">
@@ -200,7 +200,7 @@ export default function Configuration() {
                     {item.affectedTransactions} payment{item.affectedTransactions !== 1 ? "s" : ""} stuck
                   </p>
                 </div>
-                {/* ✅ CHANGED: Link to Users page to add staff to roles */}
+                {/* CHANGED: Link to Users page to add staff to roles */}
                 <button
                   onClick={() => navigate(`/users?role=${item.itemId}`)}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-[#136dec] hover:text-[#0f55c0] transition-colors bg-transparent border-none cursor-pointer p-0"

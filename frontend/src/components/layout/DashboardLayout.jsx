@@ -16,7 +16,7 @@ import {
   Bell,
   User,
   Loader2,
-  AlertCircle, // ✅ NEW: Icon for Configuration Health
+  AlertCircle, // NEW: Icon for Configuration Health
 } from "lucide-react";
 import { useAuthStore } from "@/store/store";
 import { logout } from "@/services/auth.service";
@@ -41,7 +41,7 @@ const navGroups = [
       { title: "Users & Staff", url: "/users", icon: Users },
       { title: "Roles", url: "/roles", icon: ShieldCheck },
       { title: "Fees & Items", url: "/items", icon: Tag },
-      // ✅ NEW: Configuration Health link
+      // NEW: Configuration Health link
       { title: "Configuration Health", url: "/configuration-health", icon: AlertCircle },
     ],
   },

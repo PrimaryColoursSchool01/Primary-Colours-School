@@ -109,7 +109,7 @@ export const deleteClassById = async (req, res, next) => {
       return next(err);
     }
 
-    // HARD BLOCK 1: payment records reference this class
+    //  HARD BLOCK 1: payment records reference this class
     const paymentRecordCount = await PaymentRecord.countDocuments({ classId: id });
     if (paymentRecordCount > 0) {
       const err = new Error(`Cannot delete class: ${paymentRecordCount} payment record(s) reference this class`);
@@ -117,7 +117,7 @@ export const deleteClassById = async (req, res, next) => {
       return next(err);
     }
 
-    // HARD BLOCK 2: items that would become orphaned and have transactions
+    //  HARD BLOCK 2: items that would become orphaned and have transactions
     const affectedItems = await Item.find({ scope: "class", classIds: id });
     const wouldBeOrphanedItems = affectedItems.filter((item) => item.classIds.length === 1);
 
@@ -139,17 +139,21 @@ export const deleteClassById = async (req, res, next) => {
     // Soft cleanup: remove class from items that reference it
     await Item.updateMany({ classIds: id }, { $pull: { classIds: id } });
 
-    // Find items that will be deleted (orphaned class-scoped items)
+    //  FIX: Clean up stale classIds reference on roles
+    await Role.updateMany({ classIds: id }, { $pull: { classIds: id } });
+
+    // Find orphaned class-scoped items BEFORE deleting them
     const itemsToDelete = await Item.find({ scope: "class", classIds: { $size: 0 } });
-    const deletedItemIds = itemsToDelete.map((item) => item._id.toString());
+    const deletedItemIds = itemsToDelete.map((item) => item._id);
 
     // Delete orphaned items
     await Item.deleteMany({ scope: "class", classIds: { $size: 0 } });
 
-    // --- NEW: Clean up roles that referenced the deleted items ---
+    // Clean up roles that referenced the deleted items
     if (deletedItemIds.length > 0) {
       await Role.updateMany({ itemIds: { $in: deletedItemIds } }, { $pull: { itemIds: { $in: deletedItemIds } } });
 
+      // Find roles that are now completely empty
       const emptyRoles = await Role.find({ itemIds: { $size: 0 } });
       const emptyRoleIds = emptyRoles.map((r) => r._id);
 

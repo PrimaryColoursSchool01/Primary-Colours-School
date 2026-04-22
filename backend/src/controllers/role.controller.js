@@ -9,7 +9,7 @@ import Section from "../models/section.model.js";
 const autoAssignStuckTransactions = async (role, changedBy) => {
   if (!role.itemIds?.length) return;
 
-  // ✅ FIXED: Handle both raw ObjectIds and populated document objects
+  //  FIXED: Handle both raw ObjectIds and populated document objects
   const linkedItemIds = role.itemIds.map((i) => i._id ?? i);
 
   const staffWithRole = await User.find({
@@ -131,7 +131,7 @@ export const createRole = async (req, res, next) => {
       itemIds,
     });
 
-    // ✅ NEW: Auto-assign stuck transactions for this role
+    // NEW: Auto-assign stuck transactions for this role
     await autoAssignStuckTransactions(newRole, req.user?.id);
 
     return res.status(201).json({ message: "Role created successfully", role: newRole });
@@ -267,7 +267,7 @@ export const updateRoleById = async (req, res, next) => {
       .populate("classIds", "name")
       .populate("itemIds", "name");
 
-    // ✅ NEW: If itemIds changed, auto-assign stuck transactions
+    // NEW: If itemIds changed, auto-assign stuck transactions
     if (itemIds !== undefined) {
       await autoAssignStuckTransactions(updatedRole, req.user?.id);
     }
