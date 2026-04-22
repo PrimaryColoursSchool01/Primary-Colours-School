@@ -1,7 +1,12 @@
 import Section from "../models/section.model.js";
 import Class from "../models/class.model.js";
 import Item from "../models/items-fess.model.js";
+import Role from "../models/role.model.js";
+import User from "../models/user.model.js";
+import PaymentRecord from "../models/payment-record.model.js";
+import ItemTransaction from "../models/item-transaction.model.js";
 
+// ─── SECTION CONTROLLERS ─────────────────────────────────────────────────────
 export const getAllSections = async (req, res, next) => {
   try {
     const sections = await Section.find({}).select("name createdAt").sort({ name: 1 }).lean();
@@ -101,21 +106,73 @@ export const deleteSectionById = async (req, res, next) => {
     err.statusCode = 400;
     return next(err);
   }
+
   try {
-    const deletedSection = await Section.findByIdAndDelete(id);
-    if (!deletedSection) {
+    const existingSection = await Section.findById(id);
+    if (!existingSection) {
       const err = new Error("Section not found");
       err.statusCode = 404;
       return next(err);
     }
 
-    // Delete all classes that belong to this section
+    // HARD BLOCK 1: payment records in classes under this section
+    const classes = await Class.find({ sectionId: id });
+    const classIds = classes.map((c) => c._id);
+
+    if (classIds.length > 0) {
+      const paymentRecordCount = await PaymentRecord.countDocuments({
+        classId: { $in: classIds },
+      });
+      if (paymentRecordCount > 0) {
+        const err = new Error(`Cannot delete section: ${paymentRecordCount} payment record(s) exist in classes under this section`);
+        err.statusCode = 400;
+        return next(err);
+      }
+    }
+
+    // HARD BLOCK 2: transactions on items scoped to this section
+    const sectionItems = await Item.find({ sectionId: id });
+    const sectionItemIds = sectionItems.map((i) => i._id);
+
+    if (sectionItemIds.length > 0) {
+      const transactionCount = await ItemTransaction.countDocuments({
+        itemId: { $in: sectionItemIds },
+      });
+      if (transactionCount > 0) {
+        const err = new Error(`Cannot delete section: ${transactionCount} transaction(s) reference items in this section`);
+        err.statusCode = 400;
+        return next(err);
+      }
+    }
+
+    // Perform deletion of section and its children
+    await Section.findByIdAndDelete(id);
     await Class.deleteMany({ sectionId: id });
 
-    // Delete all items scoped to this section (section and class scoped)
+    // --- Items to be deleted (section-scoped) ---
+    const itemsToDelete = await Item.find({ sectionId: id });
+    const deletedItemIds = itemsToDelete.map((item) => item._id.toString());
+
     await Item.deleteMany({ sectionId: id });
 
-    return res.status(200).json({ message: "Section deleted successfully", section: deletedSection });
+    // --- NEW: Clean up roles that referenced the deleted items ---
+    if (deletedItemIds.length > 0) {
+      // Remove item references from roles
+      await Role.updateMany({ itemIds: { $in: deletedItemIds } }, { $pull: { itemIds: { $in: deletedItemIds } } });
+
+      // Find roles that are now completely empty
+      const emptyRoles = await Role.find({ itemIds: { $size: 0 } });
+      const emptyRoleIds = emptyRoles.map((r) => r._id);
+
+      if (emptyRoleIds.length > 0) {
+        // Remove empty roles from users
+        await User.updateMany({ roles: { $in: emptyRoleIds } }, { $pull: { roles: { $in: emptyRoleIds } } });
+        // Delete the empty roles
+        await Role.deleteMany({ _id: { $in: emptyRoleIds } });
+      }
+    }
+
+    return res.status(200).json({ message: "Section deleted successfully", section: existingSection });
   } catch (error) {
     console.error("Error deleting section:", error);
     return next(error);

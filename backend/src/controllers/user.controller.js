@@ -4,6 +4,10 @@ import User from "../models/user.model.js";
 import Role from "../models/role.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
 import { sendEmail } from "../utils/sendEmail.js";
+import Item from "../models/items-fess.model.js";
+import PaymentRecord from "../models/payment-record.model.js";
+import Class from "../models/class.model.js";
+import Section from "../models/section.model.js";
 
 export const registerUser = async (req, res, next) => {
   const { fullName, email, password, userType, roleIds } = req.body;
@@ -610,11 +614,23 @@ export const deleteUserById = async (req, res, next) => {
 
     const deletedUser = await User.findByIdAndDelete(id);
 
+    // Soft cleanup: remove user from all transactions
     await ItemTransaction.updateMany({ staffIds: id }, { $pull: { staffIds: id } });
 
+    //  FIX: Add statusHistory when setting no_staff
     await ItemTransaction.updateMany(
       { staffIds: { $size: 0 }, status: { $in: ["pending", "no_staff", "no_role"] } },
-      { $set: { status: "no_staff" } },
+      {
+        $set: { status: "no_staff" },
+        $push: {
+          statusHistory: {
+            status: "no_staff",
+            changedBy: null,
+            changedAt: new Date(),
+            reason: `Staff deleted — no remaining staff assigned (user: ${deletedUser.fullName})`,
+          },
+        },
+      },
     );
 
     return res.status(200).json({

@@ -2,6 +2,9 @@ import Item from "../models/items-fess.model.js";
 import Section from "../models/section.model.js";
 import Class from "../models/class.model.js";
 import Role from "../models/role.model.js";
+import User from "../models/user.model.js";
+import PaymentRecord from "../models/payment-record.model.js";
+import ItemTransaction from "../models/item-transaction.model.js";
 
 // ─── Helper: Transform item for frontend ─────────────────────────────────────
 
@@ -256,24 +259,40 @@ export const deleteItemById = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    const deletedItem = await Item.findByIdAndDelete(id);
-
-    if (!deletedItem) {
+    const existingItem = await Item.findById(id);
+    if (!existingItem) {
       const err = new Error("Item not found");
       err.statusCode = 404;
       return next(err);
     }
 
-    // Cleanup: Remove item from all roles that reference it
+    //  HARD BLOCK: item transactions reference this item
+    const transactionCount = await ItemTransaction.countDocuments({ itemId: id });
+    if (transactionCount > 0) {
+      const err = new Error(`Cannot delete item: ${transactionCount} transaction(s) reference this item`);
+      err.statusCode = 400;
+      return next(err);
+    }
+
+    await Item.findByIdAndDelete(id);
+
+    // Soft cleanup: remove item from all roles
     await Role.updateMany({ itemIds: id }, { $pull: { itemIds: id } });
 
-    // Cleanup: Delete roles that now have no items left
-    await Role.deleteMany({ itemIds: { $size: 0 } });
+    // Find roles that are now empty
+    const emptyRoles = await Role.find({ itemIds: { $size: 0 } });
+    const emptyRoleIds = emptyRoles.map((r) => r._id);
+
+    if (emptyRoleIds.length > 0) {
+      //  FIX: Also pull empty roles from users before deleting them
+      await User.updateMany({ roles: { $in: emptyRoleIds } }, { $pull: { roles: { $in: emptyRoleIds } } });
+      await Role.deleteMany({ _id: { $in: emptyRoleIds } });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Item deleted successfully",
-      data: transformItemForFrontend(deletedItem),
+      data: transformItemForFrontend(existingItem),
     });
   } catch (error) {
     console.error("Error deleting item:", error);

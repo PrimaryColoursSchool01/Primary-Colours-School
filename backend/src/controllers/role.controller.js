@@ -2,6 +2,9 @@
 import Role from "../models/role.model.js";
 import User from "../models/user.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
+import Item from "../models/items-fess.model.js";
+import Class from "../models/class.model.js";
+import Section from "../models/section.model.js";
 
 const autoAssignStuckTransactions = async (role, changedBy) => {
   if (!role.itemIds?.length) return;
@@ -287,21 +290,77 @@ export const deleteRoleById = async (req, res, next) => {
   }
 
   try {
-    const affectedUsers = await User.countDocuments({ roles: id });
-
-    const deletedRole = await Role.findByIdAndDelete(id);
-
-    if (!deletedRole) {
+    const role = await Role.findById(id);
+    if (!role) {
       const err = new Error("Role not found");
       err.statusCode = 404;
       return next(err);
     }
 
+    const affectedUsers = await User.countDocuments({ roles: id });
+    const roleItemIds = role.itemIds || [];
+
+    await Role.findByIdAndDelete(id);
+
+    // Soft cleanup: remove role from all users
     await User.updateMany({ roles: id }, { $pull: { roles: id } });
+
+    //  Soft cleanup: re-route ItemTransactions for items that belonged to this role
+    if (roleItemIds.length > 0) {
+      for (const itemId of roleItemIds) {
+        const otherRoles = await Role.find({ itemIds: itemId });
+
+        if (otherRoles.length === 0) {
+          // No other role covers this item — transactions go back to no_role
+          await ItemTransaction.updateMany(
+            { itemId, status: { $in: ["pending", "no_staff"] } },
+            {
+              $set: { status: "no_role", staffIds: [] },
+              $push: {
+                statusHistory: {
+                  status: "no_role",
+                  changedBy: req.user?.id || null,
+                  changedAt: new Date(),
+                  reason: "Role deleted — item has no remaining assigned role",
+                },
+              },
+            },
+          );
+        } else {
+          // Other roles exist — re-evaluate remaining staff
+          const otherRoleIds = otherRoles.map((r) => r._id);
+          const remainingStaff = await User.find({
+            roles: { $in: otherRoleIds },
+            userType: "staff",
+            status: "active",
+          }).select("_id");
+
+          if (remainingStaff.length === 0) {
+            await ItemTransaction.updateMany(
+              { itemId, status: { $in: ["pending", "no_role"] } },
+              {
+                $set: { status: "no_staff", staffIds: [] },
+                $push: {
+                  statusHistory: {
+                    status: "no_staff",
+                    changedBy: req.user?.id || null,
+                    changedAt: new Date(),
+                    reason: "Role deleted — remaining roles have no active staff",
+                  },
+                },
+              },
+            );
+          } else {
+            // Update staffIds to reflect remaining staff only
+            await ItemTransaction.updateMany({ itemId, status: "pending" }, { $set: { staffIds: remainingStaff.map((s) => s._id) } });
+          }
+        }
+      }
+    }
 
     return res.status(200).json({
       message: "Role deleted successfully",
-      role: deletedRole,
+      role,
       affectedUsers,
     });
   } catch (error) {
