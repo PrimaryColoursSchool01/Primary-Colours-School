@@ -6,13 +6,14 @@ import User from "../models/user.model.js";
 
 /**
  * GET /api/admin/configuration-health
- * Returns items causing stuck transactions, grouped by root cause.
- * Designed for admin awareness only. Fixing happens in Items/Roles settings.
+ * Returns items with configuration issues (no role or no active staff),
+ * including those without any transactions yet.
  */
 export const getConfigurationHealth = async (req, res, next) => {
   try {
-    // ── 1. FIND ITEMS WITH NO ROLE (Check current Item config) ─
-    const itemsWithNoRoles = await Item.aggregate([
+    // ── 1. ALL ITEMS WITH NO ROLE (with transaction counts) ─
+    const noRoleItems = await Item.aggregate([
+      // Find roles for each item
       {
         $lookup: {
           from: "roles",
@@ -21,42 +22,40 @@ export const getConfigurationHealth = async (req, res, next) => {
           as: "assignedRoles",
         },
       },
-      { $match: { assignedRoles: { $size: 0 } } }, // Items with ZERO roles
-      { $project: { _id: 1, name: 1 } },
-    ]);
-
-    const itemIdsWithNoRoles = itemsWithNoRoles.map((i) => i._id);
-
-    // Find stuck transactions for these items
-    const noRoleAgg = await ItemTransaction.aggregate([
-      {
-        $match: {
-          itemId: { $in: itemIdsWithNoRoles },
-          status: { $in: ["no_role", "no_staff", "pending"] },
-        },
-      },
-      { $group: { _id: "$itemId", affectedTransactions: { $sum: 1 } } },
+      // Keep only items with zero roles
+      { $match: { assignedRoles: { $size: 0 } } },
+      // Count stuck transactions for these items (can be 0)
       {
         $lookup: {
-          from: "items",
-          localField: "_id",
-          foreignField: "_id",
-          as: "item",
+          from: "itemtransactions",
+          let: { itemId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$itemId", "$$itemId"] },
+                status: { $in: ["no_role", "no_staff", "pending"] },
+              },
+            },
+            { $count: "count" },
+          ],
+          as: "stuckTx",
         },
       },
-      { $unwind: "$item" },
       {
         $project: {
           _id: 0,
           itemId: "$_id",
-          itemName: "$item.name",
-          affectedTransactions: 1,
+          itemName: "$name",
+          affectedTransactions: {
+            $ifNull: [{ $arrayElemAt: ["$stuckTx.count", 0] }, 0],
+          },
         },
       },
-      { $sort: { affectedTransactions: -1 } },
+      { $sort: { affectedTransactions: -1, itemName: 1 } },
     ]);
 
-    // ── 2. FIND ITEMS WITH NO ACTIVE STAFF (Check current Role config) ─
+    // ── 2. ALL ITEMS WITH ROLES BUT NO ACTIVE STAFF ─
+    // First get items that have at least one role
     const itemsWithRoles = await Item.aggregate([
       {
         $lookup: {
@@ -66,52 +65,68 @@ export const getConfigurationHealth = async (req, res, next) => {
           as: "assignedRoles",
         },
       },
-      { $match: { assignedRoles: { $gt: [] } } }, // Has at least one role
-      { $project: { _id: 1, name: 1, assignedRoles: { $map: { input: "$assignedRoles", as: "role", in: "$$role._id" } } } },
+      { $match: { assignedRoles: { $ne: [] } } },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          assignedRoleIds: {
+            $map: {
+              input: "$assignedRoles",
+              as: "role",
+              in: "$$role._id",
+            },
+          },
+        },
+      },
     ]);
 
     const noStaffItems = [];
+
     for (const item of itemsWithRoles) {
-      // Check if ANY of the item's roles have active staff
+      // Check if ANY assigned role has at least one active staff user
       const activeStaffCount = await User.countDocuments({
-        roles: { $in: item.assignedRoles },
+        roles: { $in: item.assignedRoleIds },
         userType: "staff",
         status: "active",
       });
 
       if (activeStaffCount === 0) {
-        // This item has roles but no active staff
-        //  FIX: Include "no_role" transactions too, since they may have just gotten a role
+        // Count stuck transactions (could be 0)
         const stuckTransactions = await ItemTransaction.countDocuments({
           itemId: item._id,
-          status: { $in: ["no_role", "no_staff", "pending"] }, // ← Added "no_role"
+          status: { $in: ["no_role", "no_staff", "pending"] },
         });
 
-        if (stuckTransactions > 0) {
-          noStaffItems.push({
-            itemId: item._id,
-            itemName: item.name,
-            affectedTransactions: stuckTransactions,
-          });
-        }
+        // Always include this item, even if stuckTransactions = 0
+        noStaffItems.push({
+          itemId: item._id,
+          itemName: item.name,
+          affectedTransactions: stuckTransactions,
+        });
       }
     }
 
-    noStaffItems.sort((a, b) => b.affectedTransactions - a.affectedTransactions);
+    noStaffItems.sort((a, b) => {
+      if (b.affectedTransactions !== a.affectedTransactions) {
+        return b.affectedTransactions - a.affectedTransactions;
+      }
+      return a.itemName.localeCompare(b.itemName);
+    });
 
-    // ── 3. SUMMARY STATS ──────────────────────────────────────────────
+    // ── 3. SUMMARY STATS ─
     const summary = {
-      noRoleItemsCount: noRoleAgg.length,
+      noRoleItemsCount: noRoleItems.length,
       noStaffItemsCount: noStaffItems.length,
       totalAffectedTransactions:
-        noRoleAgg.reduce((sum, i) => sum + i.affectedTransactions, 0) + noStaffItems.reduce((sum, i) => sum + i.affectedTransactions, 0),
+        noRoleItems.reduce((sum, i) => sum + i.affectedTransactions, 0) + noStaffItems.reduce((sum, i) => sum + i.affectedTransactions, 0),
     };
 
     return res.status(200).json({
       success: true,
       data: {
         summary,
-        noRoleItems: noRoleAgg,
+        noRoleItems: noRoleItems,
         noStaffItems: noStaffItems,
       },
     });
