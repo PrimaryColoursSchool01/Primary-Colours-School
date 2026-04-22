@@ -15,6 +15,7 @@ import {
   Loader2,
   Database,
   RefreshCw,
+  Share2,
 } from "lucide-react";
 import { getAllPaymentRecords, acceptPaymentItems, rejectPaymentRecord } from "@/services/payment-record.service";
 import { Button } from "@/components/ui/button";
@@ -29,8 +30,8 @@ import autoTable from "jspdf-autotable";
 
 export default function Responses() {
   const [paymentRecords, setPaymentRecords] = useState([]);
-  const [loading, setLoading] = useState(true); // Initial full-page load
-  const [isRefetching, setIsRefetching] = useState(false); // Search/filter refetch
+  const [loading, setLoading] = useState(true);
+  const [isRefetching, setIsRefetching] = useState(false);
   const [loadingStage, setLoadingStage] = useState("initializing");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -59,7 +60,6 @@ export default function Responses() {
         setLoadingStage("connecting");
       }
 
-      // Stage 2: Fetching
       if (!isRefetch) setLoadingStage("fetching");
       const params = { page, limit: 10 };
       if (search) params.search = search;
@@ -69,13 +69,11 @@ export default function Responses() {
 
       const response = await getAllPaymentRecords(params);
 
-      // Stage 3: Processing
       if (!isRefetch) setLoadingStage("processing");
       setPaymentRecords(response.paymentRecords);
       setTotal(response.total);
       setTotalPages(response.totalPages);
 
-      // Stage 4: Ready
       if (!isRefetch) {
         setLoadingStage("ready");
         toast.success("Payment records loaded");
@@ -93,19 +91,17 @@ export default function Responses() {
   };
 
   useEffect(() => {
-    fetchPaymentRecords(false); // Initial load
+    fetchPaymentRecords(false);
   }, []);
 
   useEffect(() => {
     if (!loading) {
-      // Only refetch after initial load
       fetchPaymentRecords(true);
     }
   }, [page, status, startDate, endDate]);
 
   useEffect(() => {
     if (!loading) {
-      // Only refetch after initial load
       const timer = setTimeout(() => {
         setPage(1);
         fetchPaymentRecords(true);
@@ -217,8 +213,51 @@ export default function Responses() {
     }
   };
 
-  // ── Thermal Receipt-style PDF ──────────────────────────────────
-  const generateReceiptPDF = (record) => {
+  // ──────────────────────────────────────────────────────────────────────────
+  // Helper: Convert jsPDF instance to a File object (preserves filename on iOS)
+  // ──────────────────────────────────────────────────────────────────────────
+  const pdfToFile = (doc, filename) => {
+    const pdfBlob = doc.output("blob");
+    return new File([pdfBlob], filename, { type: "application/pdf" });
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Helper: Share file via Web Share API, with automatic download fallback
+  // ──────────────────────────────────────────────────────────────────────────
+  const sharePDF = async (file, fallbackFilename) => {
+    // Check if Web Share API with files is supported
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: "Payment Receipt",
+          text: "Receipt from Primary Colours School",
+          files: [file],
+        });
+        toast.success("Receipt ready to send");
+        return true;
+      } catch (err) {
+        // User cancelled or share failed – fallback to download
+        if (err.name !== "AbortError") {
+          console.warn("Share failed, falling back to download:", err);
+        }
+      }
+    }
+
+    // Fallback: trigger download
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fallbackFilename;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Receipt downloaded (sharing not supported)");
+    return false;
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Updated: Thermal Receipt-style PDF – now shares natively with fallback
+  // ──────────────────────────────────────────────────────────────────────────
+  const generateReceiptPDF = async (record) => {
     const acceptedItems = record.items.filter((item) => item.status === "accepted");
 
     // ── Dynamic page height based on item count ────────────────
@@ -236,7 +275,6 @@ export default function Responses() {
     const margin = 5;
 
     // ── Helpers ────────────────────────────────────────────────
-    // ✅ Use "NGN" — jsPDF default fonts don't support ₦
     const formatCurrencyPDF = (amt) => {
       const num = typeof amt === "number" ? amt : 0;
       return `NGN ${num.toLocaleString("en-NG")}`;
@@ -263,9 +301,7 @@ export default function Responses() {
     // ── Colors ─────────────────────────────────────────────────
     const BLACK = [15, 23, 42];
     const GRAY = [100, 116, 139];
-    const LIGHT_GRAY = [203, 213, 225];
     const PRIMARY = [19, 109, 236];
-    const WHITE = [255, 255, 255];
 
     let y = 9;
 
@@ -466,12 +502,18 @@ export default function Responses() {
       .setTextColor(...GRAY)
       .text("Primary Colours School - Finance Dept.", pageW / 2, y, { align: "center" });
 
-    // ── SAVE ───────────────────────────────────────────────────
-    const safeName = record.nameOfChild.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    // ──────────────────────────────────────────────────────────────
+    // Build safe filename including parent/payer name
+    // ──────────────────────────────────────────────────────────────
+    const safePayer = (record.nameOfPayerOrCompany || "Payer").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    const safeChild = record.nameOfChild.replace(/[^a-z0-9]/gi, "_").toLowerCase();
     const safeClass = (record.classId?.name || "Class").replace(/[^a-z0-9]/gi, "_").toLowerCase();
     const dateStr = new Date(record.dateOfPayment).toISOString().slice(0, 10);
-    doc.save(`Receipt_${safeName}_${safeClass}_${dateStr}.pdf`);
-    toast.success("Receipt downloaded successfully");
+    const filename = `Receipt_${safePayer}_${safeChild}_${safeClass}_${dateStr}.pdf`;
+
+    // Convert to File and share (with download fallback)
+    const file = pdfToFile(doc, filename);
+    await sharePDF(file, filename);
   };
 
   const handleExportPDF = () => {
@@ -505,7 +547,6 @@ export default function Responses() {
       doc.roundedRect(x, y, w, h, r, r, "F");
     };
 
-    // ✅ Use "NGN" prefix here too
     const formatCurrencyPDF = (amt) => {
       const num = typeof amt === "number" ? amt : 0;
       return `NGN ${num.toLocaleString("en-NG")}`;
@@ -655,7 +696,6 @@ export default function Responses() {
 
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 p-8">
-        {/* Animated loader with database icon */}
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-200 border-t-[#136dec] rounded-full animate-spin" />
           <div className="absolute inset-0 flex items-center justify-center">
@@ -663,13 +703,11 @@ export default function Responses() {
           </div>
         </div>
 
-        {/* Meaningful message with motion */}
         <div className="text-center space-y-2">
           <p className="text-sm font-semibold text-slate-700 animate-pulse">{messages[stage] || "Loading payment records..."}</p>
           <p className="text-xs text-slate-400">Please wait while we fetch your payment data</p>
         </div>
 
-        {/* Progress indicator */}
         <div className="w-48 h-1.5 bg-slate-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-[#136dec] rounded-full transition-all duration-500 ease-out"
@@ -682,7 +720,6 @@ export default function Responses() {
     );
   }
 
-  // ── Inline Loading Indicator (For Search/Filter Refetches) ───────────
   function InlineLoading() {
     return (
       <div className="flex items-center justify-center gap-2 py-8 text-slate-500">
@@ -692,7 +729,6 @@ export default function Responses() {
     );
   }
 
-  // ── Empty State ───────────────────────────────────────────────────────────
   function EmptyState() {
     return (
       <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
@@ -724,7 +760,6 @@ export default function Responses() {
     );
   }
 
-  // Show full-page loading only on initial load
   if (loading) {
     return <ResponsesLoading stage={loadingStage} />;
   }
@@ -1160,8 +1195,8 @@ export default function Responses() {
                     onClick={() => generateReceiptPDF(selectedRecord)}
                     className="w-full sm:w-auto text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 text-xs sm:text-sm h-9"
                   >
-                    <Receipt size={14} className="mr-1.5 shrink-0" />
-                    <span className="truncate">Download Receipt</span>
+                    <Share2 size={14} className="mr-1.5 shrink-0" />
+                    <span className="truncate">Send Receipt</span>
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
@@ -1211,7 +1246,7 @@ export default function Responses() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      {/* Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 border-t border-slate-200">
         <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
           © {new Date().getFullYear()} Findora · Primary Colours Schools
