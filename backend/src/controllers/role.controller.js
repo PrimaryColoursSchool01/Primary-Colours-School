@@ -3,11 +3,12 @@ import Role from "../models/role.model.js";
 import User from "../models/user.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
 
-// ✅ Helper: Auto-assign stuck transactions when role items change
 const autoAssignStuckTransactions = async (role, changedBy) => {
   if (!role.itemIds?.length) return;
 
-  // Find all active staff with this role
+  // ✅ FIXED: Handle both raw ObjectIds and populated document objects
+  const linkedItemIds = role.itemIds.map((i) => i._id ?? i);
+
   const staffWithRole = await User.find({
     roles: { $in: [role._id] },
     userType: "staff",
@@ -18,10 +19,6 @@ const autoAssignStuckTransactions = async (role, changedBy) => {
 
   const staffIds = staffWithRole.map((s) => s._id);
 
-  //  FIX: Use role.itemIds directly (no need to query Item collection)
-  const linkedItemIds = role.itemIds;
-
-  // Update stuck transactions for these items
   const result = await ItemTransaction.updateMany(
     {
       itemId: { $in: linkedItemIds },

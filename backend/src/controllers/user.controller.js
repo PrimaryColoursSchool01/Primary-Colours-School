@@ -328,26 +328,30 @@ export const updateUserById = async (req, res, next) => {
       }
 
       const oldRoleIds = user.roles.map((r) => r.toString());
-      const addedRoleIds = finalRoleIds.filter((id) => !oldRoleIds.includes(id));
+      const addedRoleIds = finalRoleIds.filter((rid) => !oldRoleIds.includes(rid));
 
-      // ✅ FIX: If new roles were added, auto-assign stuck items (query Role collection)
+      // ✅ FIXED: Include current user in staff query since their roles aren't saved yet
       if (addedRoleIds.length > 0) {
-        // ✅ FIX: Query Role collection to get itemIds
         const roles = await Role.find({ _id: { $in: addedRoleIds } })
           .select("itemIds")
           .lean();
         const linkedItemIds = roles.flatMap((role) => role.itemIds || []);
 
         if (linkedItemIds.length > 0) {
-          const allStaffWithRole = await User.find({
+          const existingStaffWithRole = await User.find({
             roles: { $in: addedRoleIds },
             userType: "staff",
             status: "active",
           }).select("_id");
 
-          if (allStaffWithRole.length > 0) {
-            const allStaffIds = allStaffWithRole.map((s) => s._id);
+          // ✅ FIX: Merge existing staff + current user (not yet persisted)
+          const staffIdMap = new Map(existingStaffWithRole.map((s) => [s._id.toString(), s._id]));
+          if (user.userType === "staff" && user.status === "active") {
+            staffIdMap.set(user._id.toString(), user._id);
+          }
+          const allStaffIds = [...staffIdMap.values()];
 
+          if (allStaffIds.length > 0) {
             await ItemTransaction.updateMany(
               {
                 itemId: { $in: linkedItemIds },
