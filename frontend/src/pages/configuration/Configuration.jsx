@@ -185,7 +185,7 @@ export default function Configuration() {
 
           {/* NEW: Helper note pointing to Users page */}
           <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 text-xs text-orange-700">
-            💡 These items have roles assigned, but those roles have no active staff.{" "}
+            These items have roles assigned, but those roles have no active staff.{" "}
             <button onClick={() => navigate("/users")} className="underline ml-1 font-medium hover:text-orange-900">
               Add staff to roles
             </button>
