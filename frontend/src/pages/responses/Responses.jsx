@@ -254,6 +254,27 @@ export default function Responses() {
     return false;
   };
 
+  const loadImageDataUrl = (src) =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+
   // ──────────────────────────────────────────────────────────────────────────
   // Updated: Thermal Receipt-style PDF – now shares natively with fallback
   // ──────────────────────────────────────────────────────────────────────────
@@ -261,7 +282,7 @@ export default function Responses() {
     const acceptedItems = record.items.filter((item) => item.status === "accepted");
 
     // ── Dynamic page height based on item count ────────────────
-    const baseHeight = 155;
+    const baseHeight = 170;
     const perItemHeight = 10;
     const pageHeight = baseHeight + acceptedItems.length * perItemHeight;
 
@@ -304,6 +325,14 @@ export default function Responses() {
     const PRIMARY = [19, 109, 236];
 
     let y = 9;
+    const badgeDataUrl = await loadImageDataUrl("/primarcoloursbadge.png");
+
+    if (badgeDataUrl) {
+      const badgeSize = 13;
+      const badgeX = (pageW - badgeSize) / 2;
+      doc.addImage(badgeDataUrl, "PNG", badgeX, y - 4, badgeSize, badgeSize);
+      y += 12;
+    }
 
     // ── SCHOOL NAME ────────────────────────────────────────────
     doc

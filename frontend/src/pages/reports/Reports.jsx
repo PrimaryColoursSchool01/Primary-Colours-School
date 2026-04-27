@@ -36,15 +36,6 @@ const formatCompactCurrency = (amount, currency = "₦") => {
   return `${currency}${amount.toLocaleString()}`;
 };
 
-const getStatusBadgeConfig = (status) => {
-  const configs = {
-    good: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", label: "On Track" },
-    "follow-up": { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", label: "Follow-up" },
-    urgent: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", label: "Urgent" },
-  };
-  return configs[status] || configs["follow-up"];
-};
-
 const PAYMENT_MODE_COLORS = {
   bank: "#136dec",
   cash: "#22c55e",
@@ -57,6 +48,11 @@ const PAYMENT_MODE_LABELS = {
   cash: "Cash",
   pos: "POS",
   other: "Other",
+};
+
+const formatStatus = (status) => {
+  if (status === "partially_accepted") return "Partial";
+  return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
 export default function Reports() {
@@ -166,14 +162,46 @@ export default function Reports() {
       doc.text(String(value), x + 4, y + 17);
     };
 
+    const loadImageDataUrl = (src) =>
+      new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return resolve(null);
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+
     // Header
     filledRect(0, 0, pageW, 42, 0, BLUE_DARK);
+    const badgeDataUrl = await loadImageDataUrl("/primarcoloursbadge.png");
+    const headerTextX = badgeDataUrl ? margin + 16 : margin;
+
+    if (badgeDataUrl) {
+      doc.addImage(badgeDataUrl, "PNG", margin, 9, 12, 12);
+    }
+
     doc
       .setFontSize(15)
       .setFont("helvetica", "bold")
       .setTextColor(...WHITE)
-      .text("Primary Colours School", margin, 15);
-    doc.setFontSize(9).setFont("helvetica", "normal").setTextColor(220, 235, 255).text("Payment & Fulfillment Report", margin, 22);
+      .text("Primary Colours School", headerTextX, 15);
+    doc
+      .setFontSize(9)
+      .setFont("helvetica", "normal")
+      .setTextColor(220, 235, 255)
+      .text("Payment & Fulfillment Report", headerTextX, 22);
     doc.setFontSize(7.5).setTextColor(220, 235, 255);
     doc.text(`Period: ${format(new Date(filters.startDate), "PP")} – ${format(new Date(filters.endDate), "PP")}`, pageW - margin, 15, {
       align: "right",
@@ -338,69 +366,98 @@ export default function Reports() {
 
   // Declare summary for JSX
   const summary = data?.summary || {};
+  const selectedClassName = classes.find((cls) => cls._id === filters.classId)?.name || "All Classes";
+  const activeFilterCount = [filters.startDate && filters.endDate, filters.classId !== "all", filters.status !== "all"].filter(Boolean).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-3 sm:p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top,#e8f1ff_0%,#f6f8fb_45%,#f8fafc_100%)] p-3 sm:p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative">
+        <div className="pointer-events-none hidden sm:block absolute -top-16 -right-12 w-48 h-48 rounded-full bg-[#136dec]/10 blur-3xl" />
+        <div className="pointer-events-none hidden sm:block absolute top-40 -left-12 w-44 h-44 rounded-full bg-emerald-200/30 blur-3xl" />
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <BarChart3 className="text-[#136dec]" size={24} />
-              Reports
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Payment collection, item fulfillment & class performance
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchReport}
-              disabled={loading}
-              className="h-8 px-3 text-[10px] sm:text-xs border-slate-200 dark:border-slate-700"
-            >
-              <RefreshCw size={12} className={`mr-1 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            {data && !loading && (
+        <div className="relative overflow-hidden rounded-2xl border border-[#136dec]/15 bg-white/90 backdrop-blur-sm shadow-[0_8px_32px_rgba(15,23,42,0.06)] p-4 sm:p-5">
+          <div className="absolute top-0 right-0 h-full w-40 bg-gradient-to-l from-[#136dec]/10 to-transparent" />
+          <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 min-w-0">
+            <div>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-[#136dec]/10 text-[#136dec] flex items-center justify-center">
+                  <BarChart3 size={18} />
+                </span>
+                Reports Dashboard
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                Payment collection, item fulfillment, and class-level performance in one view.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleExportPDF}
-                className="h-8 px-3 text-[10px] sm:text-xs border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                onClick={fetchReport}
+                disabled={loading}
+                className="h-8 px-3 text-[10px] sm:text-xs border-slate-200 bg-white hover:bg-slate-50"
               >
-                <Download size={14} className="mr-1.5" />
-                Export PDF
+                <RefreshCw size={12} className={`mr-1 ${loading ? "animate-spin" : ""}`} />
+                Refresh
               </Button>
-            )}
+              {data && !loading && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportPDF}
+                  className="h-8 px-3 text-[10px] sm:text-xs border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  <Download size={14} className="mr-1.5" />
+                  Export PDF
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="relative mt-3 flex flex-wrap gap-2 text-[10px] sm:text-xs min-w-0">
+            <span className="max-w-full px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600 whitespace-nowrap">
+              Active filters: <span className="font-semibold text-slate-900">{activeFilterCount}</span>
+            </span>
+            <span className="max-w-full px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600">
+              Class: <span className="font-semibold text-slate-900 inline-block max-w-[150px] truncate align-bottom">{selectedClassName}</span>
+            </span>
+            <span className="max-w-full px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600 whitespace-nowrap">
+              Status: <span className="font-semibold text-slate-900">{filters.status === "all" ? "All" : formatStatus(filters.status)}</span>
+            </span>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4 space-y-3">
+        <div className="bg-white/95 rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+            <p className="text-xs sm:text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-[#136dec]/10 text-[#136dec] flex items-center justify-center">
+                <Filter size={13} />
+              </span>
+              Report Filters
+            </p>
+            <span className="text-[10px] sm:text-xs text-slate-500">Choose period, class, and status</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">Start Date</label>
+              <label className="text-[10px] sm:text-xs font-medium text-slate-500">Start Date</label>
               <input
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                className="w-full h-9 px-3 text-xs sm:text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#136dec]/20"
+                className="w-full h-9 px-3 text-xs sm:text-sm border border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#136dec]/20"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">End Date</label>
+              <label className="text-[10px] sm:text-xs font-medium text-slate-500">End Date</label>
               <input
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                className="w-full h-9 px-3 text-xs sm:text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#136dec]/20"
+                className="w-full h-9 px-3 text-xs sm:text-sm border border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#136dec]/20"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">Class</label>
+              <label className="text-[10px] sm:text-xs font-medium text-slate-500">Class</label>
               <Select value={filters.classId} onValueChange={(v) => setFilters({ ...filters, classId: v })} disabled={classesLoading}>
                 <SelectTrigger className="h-9 text-xs sm:text-sm">
                   <SelectValue placeholder={classesLoading ? "Loading..." : "All Classes"} />
@@ -416,7 +473,7 @@ export default function Reports() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">Status</label>
+              <label className="text-[10px] sm:text-xs font-medium text-slate-500">Status</label>
               <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v })}>
                 <SelectTrigger className="h-9 text-xs sm:text-sm">
                   <SelectValue placeholder="All Status" />
@@ -435,7 +492,7 @@ export default function Reports() {
             <Button
               onClick={fetchReport}
               disabled={loading}
-              className="h-9 px-4 bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm"
+              className="h-9 px-4 bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm shadow-[0_8px_20px_rgba(19,109,236,0.3)]"
             >
               <Filter size={14} className="mr-1.5" />
               {loading ? "Generating..." : "Generate Report"}
@@ -445,27 +502,36 @@ export default function Reports() {
 
         {/* Error State */}
         {error && (
-          <div className="p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
+          <div className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
             <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} />
             <div>
-              <p className="text-xs sm:text-sm font-medium text-red-700 dark:text-red-400">Failed to load report</p>
-              <p className="text-[10px] sm:text-xs text-red-600 dark:text-red-300 mt-0.5">{error}</p>
+              <p className="text-xs sm:text-sm font-medium text-red-700">Failed to load report</p>
+              <p className="text-[10px] sm:text-xs text-red-600 mt-0.5">{error}</p>
             </div>
           </div>
         )}
 
         {/* SECTION 1: Financial Summary */}
         {data && !loading && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in-0 duration-300">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               {[
-                { label: "Total", value: summary.totalCount?.toLocaleString(), icon: BarChart3, color: "text-[#136dec]" },
+                {
+                  label: "Total",
+                  value: summary.totalCount?.toLocaleString(),
+                  icon: BarChart3,
+                  color: "text-[#136dec]",
+                  iconBg: "bg-[#136dec]/10",
+                  border: "border-[#136dec]/20",
+                },
                 {
                   label: "Accepted",
                   value: summary.acceptedCount?.toLocaleString(),
                   sub: formatCompactCurrency(summary.totalAmount),
                   icon: CheckCircle,
                   color: "text-green-600",
+                  iconBg: "bg-green-100",
+                  border: "border-green-200",
                 },
                 {
                   label: "Partial",
@@ -473,6 +539,8 @@ export default function Reports() {
                   sub: "Follow-up",
                   icon: TrendingUp,
                   color: "text-orange-600",
+                  iconBg: "bg-orange-100",
+                  border: "border-orange-200",
                 },
                 {
                   label: "Pending",
@@ -480,6 +548,8 @@ export default function Reports() {
                   sub: formatCompactCurrency(summary.pendingRevenue),
                   icon: Clock,
                   color: "text-yellow-600",
+                  iconBg: "bg-yellow-100",
+                  border: "border-yellow-200",
                 },
                 {
                   label: "Rejected",
@@ -487,18 +557,20 @@ export default function Reports() {
                   sub: "No revenue",
                   icon: XCircle,
                   color: "text-red-600",
+                  iconBg: "bg-red-100",
+                  border: "border-red-200",
                 },
               ].map((card, i) => (
                 <div
                   key={i}
-                  className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4 flex items-center gap-3"
+                  className={`group relative overflow-hidden bg-white rounded-2xl border ${card.border} p-3.5 sm:p-4 flex items-center gap-3 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5`}
                 >
-                  <div className={`w-9 h-9 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center ${card.color}`}>
+                  <div className={`w-9 h-9 rounded-lg ${card.iconBg} flex items-center justify-center ${card.color}`}>
                     <card.icon size={18} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">{card.label}</p>
-                    <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">{card.value}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500">{card.label}</p>
+                    <p className="text-sm sm:text-base font-bold text-slate-900 truncate">{card.value}</p>
                     {card.sub && <p className="text-[10px] text-slate-400">{card.sub}</p>}
                   </div>
                 </div>
@@ -506,14 +578,15 @@ export default function Reports() {
             </div>
 
             {/* Payment Mode Chart */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-1 min-w-0">
+                <h3 className="text-xs sm:text-sm font-semibold text-slate-900 flex items-center gap-2">
                   <Percent size={14} className="text-[#136dec]" />
                   Payment Mode Breakdown
                 </h3>
               </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
+              <p className="text-[10px] sm:text-xs text-slate-500 mb-3">Distribution by payment channel for the selected period.</p>
+              <div className="flex flex-col sm:flex-row items-center gap-4 min-w-0">
                 <div className="w-full sm:w-48 h-48">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -530,12 +603,12 @@ export default function Reports() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
+                <div className="flex-1 w-full min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   {Object.entries(summary.paymentModes || {}).map(([mode, info]) => (
-                    <div key={mode} className="flex items-center gap-2">
+                    <div key={mode} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 min-w-0">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PAYMENT_MODE_COLORS[mode] }} />
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-700 dark:text-slate-300 truncate">{PAYMENT_MODE_LABELS[mode]}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-slate-700 truncate">{PAYMENT_MODE_LABELS[mode]}</p>
                         <p className="text-[10px] text-slate-400">
                           {info.count} payments • {info.percentage}%
                         </p>
@@ -550,8 +623,8 @@ export default function Reports() {
 
         {/* SECTION 2: Item Fulfillment */}
         {data && !loading && data.itemFulfillment && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-4">
-            <h3 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-900 flex items-center gap-2">
               <Package size={14} className="text-[#136dec]" />
               Item Fulfillment
             </h3>
@@ -566,7 +639,7 @@ export default function Reports() {
                 },
                 { label: "Pending", value: data.itemFulfillment.pending, color: "text-yellow-600" },
               ].map((stat, i) => (
-                <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <p className="text-[10px] sm:text-xs text-slate-500">{stat.label}</p>
                   <p className={`text-lg sm:text-xl font-bold ${stat.color}`}>{stat.value}</p>
                   {stat.percent !== undefined && (
@@ -575,7 +648,7 @@ export default function Reports() {
                         <span>Collection Rate</span>
                         <span>{stat.percent}%</span>
                       </div>
-                      <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-green-500 rounded-full transition-all"
                           style={{ width: `${Math.min(stat.percent, 100)}%` }}
@@ -606,12 +679,13 @@ export default function Reports() {
 
         {/* SECTION 3: Class Breakdown */}
         {data && !loading && data.byClass?.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <h3 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <h3 className="text-xs sm:text-sm font-semibold text-slate-900 flex items-center gap-2">
                 <TrendingUp size={14} className="text-[#136dec]" />
                 Class Breakdown
               </h3>
+              <span className="text-[10px] sm:text-xs text-slate-500">Performance by class and payment status</span>
             </div>
             <div className="overflow-x-auto">
               <Table>
@@ -629,10 +703,9 @@ export default function Reports() {
                 </TableHeader>
                 <TableBody>
                   {data.byClass.map((row) => {
-                    const badge = getStatusBadgeConfig(row.statusBadge);
                     return (
-                      <TableRow key={row._id}>
-                        <TableCell className="text-xs sm:text-sm font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      <TableRow key={row._id} className="hover:bg-slate-50/70 transition-colors">
+                        <TableCell className="text-xs sm:text-sm font-medium text-slate-900 whitespace-nowrap">
                           {row.className || "N/A"}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm text-center font-medium">{row.paymentsAccepted ?? "—"}</TableCell>
@@ -647,7 +720,7 @@ export default function Reports() {
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div className="w-12 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${row.completionRate >= 80 ? "bg-green-500" : row.completionRate >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
                                 style={{ width: `${Math.min(row.completionRate, 100)}%` }}
@@ -656,7 +729,7 @@ export default function Reports() {
                             <span className="text-[10px] font-medium">{row.completionRate}%</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm text-right font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                        <TableCell className="text-xs sm:text-sm text-right font-semibold text-slate-900 whitespace-nowrap">
                           {formatCompactCurrency(row.totalAmount)}
                         </TableCell>
                       </TableRow>
@@ -665,8 +738,8 @@ export default function Reports() {
                 </TableBody>
               </Table>
             </div>
-            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+            <div className="p-3 sm:p-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/70">
+              <p className="text-[10px] sm:text-xs text-slate-500">
                 Showing {data.byClass.length} classes • {data.totalRecords} total records
               </p>
               <p className="text-[10px] sm:text-xs text-slate-400">
@@ -684,34 +757,31 @@ export default function Reports() {
           <div className="space-y-4 animate-pulse">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div
-                  key={i}
-                  className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4 flex items-center gap-3"
-                >
-                  <div className="w-9 h-9 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+                <div key={i} className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 flex items-center gap-3">
+                  <div className="w-9 h-9 bg-slate-200 rounded-lg" />
                   <div className="space-y-2 flex-1">
-                    <div className="h-2 w-16 bg-slate-200 dark:bg-slate-800 rounded" />
-                    <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+                    <div className="h-2 w-16 bg-slate-200 rounded" />
+                    <div className="h-4 w-20 bg-slate-200 rounded" />
                   </div>
                 </div>
               ))}
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 h-48" />
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
-              <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
+            <div className="bg-white rounded-xl border border-slate-200 p-4 h-48" />
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <div className="h-4 w-32 bg-slate-200 rounded" />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
-                    <div className="h-2 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
-                    <div className="h-5 w-12 bg-slate-200 dark:bg-slate-800 rounded" />
+                  <div key={i} className="p-3 bg-slate-50 rounded-lg space-y-2">
+                    <div className="h-2 w-20 bg-slate-200 rounded" />
+                    <div className="h-5 w-12 bg-slate-200 rounded" />
                   </div>
                 ))}
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-              <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded mb-3" />
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="h-4 w-32 bg-slate-200 rounded mb-3" />
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-10 w-full bg-slate-100 dark:bg-slate-800 rounded mb-2" />
+                <div key={i} className="h-10 w-full bg-slate-100 rounded mb-2" />
               ))}
             </div>
           </div>
@@ -719,10 +789,12 @@ export default function Reports() {
 
         {/* Empty State */}
         {!data && !loading && !error && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 sm:p-12 text-center">
-            <Calendar className="mx-auto text-slate-300 dark:text-slate-600 mb-3" size={40} />
-            <h3 className="text-sm sm:text-base font-medium text-slate-900 dark:text-white">No report generated yet</h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 sm:p-12 text-center shadow-sm">
+            <div className="w-14 h-14 rounded-full bg-[#136dec]/10 text-[#136dec] mx-auto mb-3 flex items-center justify-center">
+              <Calendar size={30} />
+            </div>
+            <h3 className="text-sm sm:text-base font-semibold text-slate-900">No report generated yet</h3>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
               Select a date range and click "Generate Report" to view payment summaries, item fulfillment, and class breakdowns.
             </p>
           </div>

@@ -42,7 +42,7 @@ const navGroups = [
       { title: "Roles", url: "/roles", icon: ShieldCheck },
       { title: "Fees & Items", url: "/items", icon: Tag },
       // NEW: Configuration Health link
-      { title: "Configuration Health", url: "/configuration-health", icon: AlertCircle },
+      { title: "Configuration", url: "/configuration-health", icon: AlertCircle },
     ],
   },
   {
