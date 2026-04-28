@@ -120,13 +120,21 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
 
   const filteredItems = items.filter((item) => {
     if (selectionType === "all-sections") {
+      // Only show global items for school-wide scope
       return item.scope === "global";
     }
     if (selectionType === "section-all-classes") {
-      return item.scope === "section" && (item.sectionId === sectionId || item.sectionId?._id === sectionId);
+      // Show global items + section items for the selected section
+      if (item.scope === "global") return true;
+      if (item.scope === "section" && (item.sectionId === sectionId || item.sectionId?._id === sectionId)) return true;
+      return false;
     }
     if (selectionType === "section-specific-classes") {
-      return item.scope === "class" && item.classIds?.some((id) => selectedClassIds.includes(id));
+      // Show global items + section items for the parent section + class-specific items
+      if (item.scope === "global") return true;
+      if (item.scope === "section" && (item.sectionId === sectionId || item.sectionId?._id === sectionId)) return true;
+      if (item.scope === "class" && item.classIds?.some((id) => selectedClassIds.includes(id))) return true;
+      return false;
     }
     return true;
   });
@@ -299,17 +307,17 @@ function RoleModal({ open, onOpenChange, onSubmit, editingRole, sections, classe
               {/* Info messages */}
               {selectionType === "all-sections" && (
                 <p className="text-[9px] sm:text-[10px] text-blue-700 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-blue-200">
-                  Only school-wide fee items are available for this scope.
+                  Showing school-wide fee items.
                 </p>
               )}
               {selectionType === "section-all-classes" && sectionId && (
                 <p className="text-[9px] sm:text-[10px] text-blue-700 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-blue-200">
-                  Only fee items for this section are available.
+                  Showing school-wide items + items for the selected section.
                 </p>
               )}
               {selectionType === "section-specific-classes" && sectionId && (
                 <p className="text-[9px] sm:text-[10px] text-blue-700 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-blue-200">
-                  Only fee items for selected classes are available.
+                  Showing school-wide items + section items + items for selected classes.
                 </p>
               )}
 
