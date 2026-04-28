@@ -752,8 +752,10 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Pipeline */}
         <div className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 lg:p-6">
-          <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">Item Fulfillment Pipeline</h4>
-          <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">Track items through verification to collection</p>
+          <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-0.5">Item Processing Stages</h4>
+          <p className="text-[11px] sm:text-xs text-slate-500 mb-5 sm:mb-6 lg:mb-8">
+            Shows how many items are waiting, approved, or already collected.
+          </p>
           <div className="space-y-6 sm:space-y-7 lg:space-y-8">
             {pipelineStatus.length > 0 ? (
               pipelineStatus.map((stage) => <PipelineStage key={stage.stage} stage={stage} />)

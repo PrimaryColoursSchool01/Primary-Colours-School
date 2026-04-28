@@ -199,15 +199,22 @@ export default function Responses() {
   };
 
   const getEvidenceImageSrc = (record) => {
-    if (record.paymentEvidenceType !== "image" || !record.paymentEvidenceImage?.data) return null;
+    if (record.paymentEvidenceType !== "image" || !record.paymentEvidenceImage) return null;
     try {
-      const bytes = new Uint8Array(record.paymentEvidenceImage.data);
+      const raw = Array.isArray(record.paymentEvidenceImage?.data)
+        ? record.paymentEvidenceImage.data
+        : Array.isArray(record.paymentEvidenceImage)
+          ? record.paymentEvidenceImage
+          : null;
+      if (!raw) return null;
+      const bytes = new Uint8Array(raw);
       let binary = "";
       for (let i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i]);
       }
       const base64 = btoa(binary);
-      return `${record.paymentEvidenceContentType};base64,${base64}`;
+      const contentType = record.paymentEvidenceContentType || "image/jpeg";
+      return `data:${contentType};base64,${base64}`;
     } catch {
       return null;
     }
@@ -850,33 +857,49 @@ export default function Responses() {
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="flex flex-wrap items-center gap-2 flex-1">
-              <div className="relative flex-[1_1_120px] min-w-[120px]">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-9 w-full text-xs sm:text-sm"
-                  disabled={isRefetching}
-                />
+              <div className="flex-[1_1_120px] min-w-[120px]">
+                <label htmlFor="responses-start-date" className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">
+                  Start Date
+                </label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                  <Input
+                    id="responses-start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setPage(1);
+                    }}
+                    className="pl-9 pr-2 w-full text-xs sm:text-sm bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    aria-label="Start date"
+                    disabled={isRefetching}
+                  />
+                </div>
+                {!startDate && <p className="mt-1 text-[10px] text-slate-400">Tap to choose start date</p>}
               </div>
-              <span className="text-xs text-slate-400 shrink-0 hidden sm:inline">to</span>
-              <div className="relative flex-[1_1_120px] min-w-[120px]">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <Input
-                  type="date"
-                  value={endDate}
-                  min={startDate || undefined}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-9 w-full text-xs sm:text-sm"
-                  disabled={isRefetching}
-                />
+              <span className="text-xs text-slate-400 shrink-0 hidden sm:inline mt-5">to</span>
+              <div className="flex-[1_1_120px] min-w-[120px]">
+                <label htmlFor="responses-end-date" className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">
+                  End Date
+                </label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                  <Input
+                    id="responses-end-date"
+                    type="date"
+                    value={endDate}
+                    min={startDate || undefined}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setPage(1);
+                    }}
+                    className="pl-9 pr-2 w-full text-xs sm:text-sm bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    aria-label="End date"
+                    disabled={isRefetching}
+                  />
+                </div>
+                {!endDate && <p className="mt-1 text-[10px] text-slate-400">Tap to choose end date</p>}
               </div>
             </div>
             {(startDate || endDate) && (
@@ -1085,24 +1108,31 @@ export default function Responses() {
                     </div>
                   ) : (
                     <div className="space-y-2">
+                      {(() => {
+                        const evidenceSrc = getEvidenceImageSrc(selectedRecord);
+                        return (
+                          <>
                       <div className="flex items-center gap-2">
                         <ImageIcon size={14} className="text-slate-400 shrink-0" />
                         <p className="text-xs text-slate-500">
                           Uploaded: {new Date(selectedRecord.paymentEvidenceUploadedAt).toLocaleDateString()}
                         </p>
                       </div>
-                      {selectedRecord.paymentEvidenceImage?.data ? (
+                      {evidenceSrc ? (
                         <img
-                          src={getEvidenceImageSrc(selectedRecord)}
+                          src={evidenceSrc}
                           alt="Payment receipt"
                           className="w-full max-h-48 sm:max-h-60 object-contain rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => window.open(getEvidenceImageSrc(selectedRecord), "_blank")}
+                          onClick={() => window.open(evidenceSrc, "_blank")}
                         />
                       ) : (
                         <div className="flex items-center justify-center p-4 bg-slate-100 dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
                           <p className="text-xs text-slate-400">Image not available</p>
                         </div>
                       )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
