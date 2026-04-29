@@ -328,6 +328,7 @@ export default function StaffAssignments() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [collecting, setCollecting] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -338,7 +339,7 @@ export default function StaffAssignments() {
         setError(null);
 
         const params = { page: pg, limit: LIMIT };
-        if (search.trim()) params.search = search;
+        if (appliedSearch.trim()) params.search = appliedSearch;
 
         const res = await getStaffAssignments(params);
         setTransactions(res.data.transactions || []);
@@ -353,12 +354,12 @@ export default function StaffAssignments() {
         setRefreshing(false);
       }
     },
-    [search],
+    [appliedSearch],
   );
 
   useEffect(() => {
     fetchAssignments(1);
-  }, [search, fetchAssignments]);
+  }, [appliedSearch, fetchAssignments]);
 
   const handlePage = (p) => {
     fetchAssignments(p, true);
@@ -380,8 +381,14 @@ export default function StaffAssignments() {
     }
   };
 
-  const clearSearch = () => setSearch("");
-  const hasSearch = !!search;
+  const handleSearch = () => {
+    setAppliedSearch(search.trim());
+  };
+  const clearSearch = () => {
+    setSearch("");
+    setAppliedSearch("");
+  };
+  const hasSearch = !!appliedSearch;
 
   if (loading) return <PageSkeleton />;
 
@@ -436,28 +443,36 @@ export default function StaffAssignments() {
 
         {/* ── Search Bar Only (No Filters) ───────────────────────────── */}
         <div className="fade-up-1">
-          <div className="search-wrap relative">
-            <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
-            <Input
-              placeholder="Search student, item, or class…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-11 pl-10 pr-4 rounded-xl border-slate-200 bg-white text-sm placeholder:text-slate-300 focus:ring-2 focus:ring-[#136dec]/20 focus:border-[#136dec]"
-            />
-            {search && (
-              <button
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+          <div className="flex gap-2">
+            <div className="search-wrap relative flex-1">
+              <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
+              <Input
+                placeholder="Search student, item, or class…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSearch();
+                }}
+                className="h-11 pl-10 pr-10 rounded-xl border-slate-200 bg-white text-sm placeholder:text-slate-300 focus:ring-2 focus:ring-[#136dec]/20 focus:border-[#136dec]"
+              />
+              {search && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button onClick={handleSearch} className="h-11 rounded-xl bg-[#136dec] hover:bg-[#0f5bbd] text-white px-4">
+              Search
+            </Button>
           </div>
 
           {hasSearch && (
             <div className="fade-in flex items-center gap-2 mt-2">
               <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                "{search}"
+                "{appliedSearch}"
                 <button onClick={clearSearch}>
                   <X className="h-3 w-3" />
                 </button>

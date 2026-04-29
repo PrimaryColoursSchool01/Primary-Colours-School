@@ -1,5 +1,5 @@
 // src/pages/staff/StaffHistory.jsx
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { getStaffHistory } from "@/services/staff.service";
 import { Button } from "@/components/ui/button";
@@ -214,20 +214,10 @@ export default function StaffHistory() {
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [appliedStart, setAppliedStart] = useState(defaults.start);
   const [appliedEnd, setAppliedEnd] = useState(defaults.end);
-
-  const searchInputRef = useRef(null);
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   const fetchHistory = useCallback(
     async (pg = 1, isInitialLoad = false) => {
@@ -240,7 +230,7 @@ export default function StaffHistory() {
         setError(null);
 
         const params = { page: pg, limit: LIMIT };
-        if (debouncedSearch.trim()) params.search = debouncedSearch;
+        if (appliedSearch.trim()) params.search = appliedSearch;
 
         const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
         if (hasCustomDateRange) {
@@ -261,7 +251,7 @@ export default function StaffHistory() {
         setRefreshing(false);
       }
     },
-    [debouncedSearch, appliedStart, appliedEnd, defaults],
+    [appliedSearch, appliedStart, appliedEnd, defaults],
   );
 
   // Initial fetch (full‑page loading)
@@ -269,17 +259,20 @@ export default function StaffHistory() {
     fetchHistory(1, true);
   }, []);
 
-  // Fetch when applied filters or debounced search change (subtle refreshing)
+  // Fetch when applied filters or applied search change (subtle refreshing)
   useEffect(() => {
     if (!loading) {
       fetchHistory(1, false);
     }
-  }, [appliedStart, appliedEnd, debouncedSearch]);
+  }, [appliedStart, appliedEnd, appliedSearch]);
 
   const handleApplyFilters = () => {
     setAppliedStart(startDate);
     setAppliedEnd(endDate);
     setShowFilters(false);
+  };
+  const handleSearch = () => {
+    setAppliedSearch(search.trim());
   };
 
   const handleClearFilters = () => {
@@ -289,6 +282,7 @@ export default function StaffHistory() {
     setAppliedStart(d.start);
     setAppliedEnd(d.end);
     setSearch("");
+    setAppliedSearch("");
   };
 
   const handlePage = (p) => {
@@ -297,7 +291,7 @@ export default function StaffHistory() {
   };
 
   const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
-  const hasActiveFilters = hasCustomDateRange || debouncedSearch;
+  const hasActiveFilters = hasCustomDateRange || appliedSearch;
 
   if (loading) return <PageSkeleton />;
 
@@ -363,10 +357,12 @@ export default function StaffHistory() {
             <div className="search-wrap relative flex-1">
               <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
               <Input
-                ref={searchInputRef}
                 placeholder="Search student, item, class, staff…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSearch();
+                }}
                 className="h-11 pl-10 pr-10 rounded-xl border-slate-200 bg-white text-sm placeholder:text-slate-300 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
               {search && (
@@ -378,6 +374,9 @@ export default function StaffHistory() {
                 </button>
               )}
             </div>
+            <Button onClick={handleSearch} className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4">
+              Search
+            </Button>
 
             <button
               onClick={() => setShowFilters((v) => !v)}
@@ -453,10 +452,15 @@ export default function StaffHistory() {
                   </button>
                 </span>
               )}
-              {debouncedSearch && (
+              {appliedSearch && (
                 <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                  "{debouncedSearch}"
-                  <button onClick={() => setSearch("")}>
+                  "{appliedSearch}"
+                  <button
+                    onClick={() => {
+                      setSearch("");
+                      setAppliedSearch("");
+                    }}
+                  >
                     <X className="h-3 w-3" />
                   </button>
                 </span>
