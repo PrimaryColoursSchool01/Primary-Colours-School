@@ -38,6 +38,7 @@ export default function Responses() {
   const [totalPages, setTotalPages] = useState(0);
 
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -49,7 +50,7 @@ export default function Responses() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const hasActiveFilters = search.trim() !== "" || status !== "all" || startDate !== "" || endDate !== "";
+  const hasActiveFilters = appliedSearch.trim() !== "" || status !== "all" || startDate !== "" || endDate !== "";
 
   const fetchPaymentRecords = async (isRefetch = false) => {
     try {
@@ -62,7 +63,7 @@ export default function Responses() {
 
       if (!isRefetch) setLoadingStage("fetching");
       const params = { page, limit: 10 };
-      if (search) params.search = search;
+      if (appliedSearch) params.search = appliedSearch;
       if (status !== "all") params.status = status;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
@@ -98,17 +99,7 @@ export default function Responses() {
     if (!loading) {
       fetchPaymentRecords(true);
     }
-  }, [page, status, startDate, endDate]);
-
-  useEffect(() => {
-    if (!loading) {
-      const timer = setTimeout(() => {
-        setPage(1);
-        fetchPaymentRecords(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [search]);
+  }, [page, status, startDate, endDate, appliedSearch]);
 
   const handleViewDetails = (record) => {
     setSelectedRecord(record);
@@ -168,10 +159,17 @@ export default function Responses() {
 
   const handleClearAllFilters = () => {
     setSearch("");
+    setAppliedSearch("");
     setStatus("all");
     setStartDate("");
     setEndDate("");
     setPage(1);
+  };
+
+  const handleSearch = () => {
+    const normalized = search.trim();
+    setPage(1);
+    setAppliedSearch(normalized);
   };
 
   const getStatusBadge = (status) => {
@@ -624,7 +622,7 @@ export default function Responses() {
     let filterParts = [];
     if (startDate || endDate) filterParts.push(`Date: ${startDate || "Any"} - ${endDate || "Any"}`);
     if (status !== "all") filterParts.push(`Status: ${formatStatus(status)}`);
-    if (search.trim()) filterParts.push(`Search: "${search}"`);
+    if (appliedSearch.trim()) filterParts.push(`Search: "${appliedSearch}"`);
 
     doc.text(filterParts.length > 0 ? `Filters: ${filterParts.join("  |  ")}` : "Filters: None", margin + 4, 45.5);
 
@@ -830,10 +828,23 @@ export default function Responses() {
                 placeholder="Search by child or payer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSearch();
+                }}
                 className="pl-9 w-full text-xs sm:text-sm"
                 disabled={isRefetching}
               />
             </div>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={handleSearch}
+              disabled={isRefetching}
+              className="h-9 px-4 text-xs sm:text-sm bg-[#136dec] hover:bg-[#0f5fce] text-white"
+            >
+              Search
+            </Button>
             <Select
               value={status}
               onValueChange={(v) => {
