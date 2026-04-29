@@ -49,6 +49,8 @@ export default function Responses() {
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
 
   const hasActiveFilters = appliedSearch.trim() !== "" || status !== "all" || startDate !== "" || endDate !== "";
 
@@ -121,12 +123,15 @@ export default function Responses() {
       return;
     }
     try {
+      setActionLoading(true);
       await acceptPaymentItems(selectedRecord._id, selectedItemIds);
       toast.success("Items accepted successfully");
       setDetailModalOpen(false);
       fetchPaymentRecords(true);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to accept items");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -136,6 +141,7 @@ export default function Responses() {
       return;
     }
     try {
+      setActionLoading(true);
       await rejectPaymentRecord(selectedRecord._id, rejectionReason);
       toast.success("Payment record rejected");
       setRejectModalOpen(false);
@@ -143,6 +149,8 @@ export default function Responses() {
       fetchPaymentRecords(true);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to reject");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1250,11 +1258,11 @@ export default function Responses() {
                 </Button>
                 <Button
                   onClick={handleAccept}
-                  disabled={selectedItemIds.length === 0}
+                  disabled={selectedItemIds.length === 0 || actionLoading}
                   className="w-full sm:w-auto bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
                 >
-                  <CheckCircle size={14} className="mr-1.5 shrink-0" />
-                  <span className="truncate">Accept Selected ({selectedItemIds.length})</span>
+                  {actionLoading ? <Loader2 size={14} className="mr-1.5 shrink-0 animate-spin" /> : <CheckCircle size={14} className="mr-1.5 shrink-0" />}
+                  <span className="truncate">{actionLoading ? "Processing..." : `Accept Selected (${selectedItemIds.length})`}</span>
                 </Button>
               </>
             ) : (
@@ -1262,11 +1270,19 @@ export default function Responses() {
                 {selectedRecord?.items?.some((item) => item.status === "accepted") && (
                   <Button
                     variant="outline"
-                    onClick={() => generateReceiptPDF(selectedRecord)}
+                    onClick={async () => {
+                      try {
+                        setReceiptLoading(true);
+                        await generateReceiptPDF(selectedRecord);
+                      } finally {
+                        setReceiptLoading(false);
+                      }
+                    }}
+                    disabled={receiptLoading}
                     className="w-full sm:w-auto text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 text-xs sm:text-sm h-9"
                   >
-                    <Share2 size={14} className="mr-1.5 shrink-0" />
-                    <span className="truncate">Send Receipt</span>
+                    {receiptLoading ? <Loader2 size={14} className="mr-1.5 shrink-0 animate-spin" /> : <Share2 size={14} className="mr-1.5 shrink-0" />}
+                    <span className="truncate">{receiptLoading ? "Preparing..." : "Send Receipt"}</span>
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
@@ -1309,8 +1325,8 @@ export default function Responses() {
             <Button variant="outline" onClick={() => setRejectModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleReject} className="w-full sm:w-auto text-xs sm:text-sm h-9">
-              Reject Pending Items
+            <Button variant="destructive" onClick={handleReject} disabled={actionLoading} className="w-full sm:w-auto text-xs sm:text-sm h-9">
+              {actionLoading ? "Processing..." : "Reject Pending Items"}
             </Button>
           </div>
         </DialogContent>

@@ -62,6 +62,7 @@ export default function Reports() {
   const [error, setError] = useState(null);
   const [classes, setClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Fetch classes from API
   useEffect(() => {
@@ -111,6 +112,8 @@ export default function Reports() {
   // PDF Export
   const handleExportPDF = useCallback(async () => {
     if (!data) return toast.error("Generate a report first");
+    setExportingPdf(true);
+    try {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
@@ -350,6 +353,9 @@ export default function Reports() {
       `PrimaryColours_Report_${format(new Date(filters.startDate), "yyyy-MM-dd")}_to_${format(new Date(filters.endDate), "yyyy-MM-dd")}.pdf`,
     );
     toast.success("Report downloaded successfully");
+    } finally {
+      setExportingPdf(false);
+    }
   }, [data, filters]);
 
   // Pie chart data
@@ -405,10 +411,11 @@ export default function Reports() {
                   variant="outline"
                   size="sm"
                   onClick={handleExportPDF}
+                  disabled={exportingPdf}
                   className="h-8 px-3 text-[10px] sm:text-xs border-slate-200 bg-white hover:bg-slate-50"
                 >
-                  <Download size={14} className="mr-1.5" />
-                  Export PDF
+                  <Download size={14} className={`mr-1.5 ${exportingPdf ? "animate-pulse" : ""}`} />
+                  {exportingPdf ? "Exporting..." : "Export PDF"}
                 </Button>
               )}
             </div>

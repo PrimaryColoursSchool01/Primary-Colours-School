@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X, Info } from "lucide-react";
+import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X, Info, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -263,6 +263,7 @@ export default function Items() {
 
   // ─── Workflow Reminder Banner State ───────────────────────────────────────
   const [showWorkflowReminder, setShowWorkflowReminder] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // For reading ?id= parameter from Configuration page
   const [searchParams] = useSearchParams();
@@ -364,13 +365,15 @@ export default function Items() {
 
   // ─── PDF Export ────────────────────────────────────────────────────────────
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!items.length) {
       toast.error("No items to export");
       return;
     }
+    setIsExportingPdf(true);
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    try {
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 15;
@@ -510,9 +513,12 @@ export default function Items() {
       },
     });
 
-    const filename = `Items_Master_List_${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(filename);
-    toast.success("PDF exported successfully");
+      const filename = `Items_Master_List_${new Date().toISOString().slice(0, 10)}.pdf`;
+      doc.save(filename);
+      toast.success("PDF exported successfully");
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   // ─── Filter & Pagination ───────────────────────────────────────────────────
@@ -545,10 +551,11 @@ export default function Items() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleExportPDF}
+              disabled={isExportingPdf}
               className="h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
             >
-              <Download size={14} />
-              <span className="hidden sm:inline">Export PDF</span>
+              {isExportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              <span className="hidden sm:inline">{isExportingPdf ? "Exporting..." : "Export PDF"}</span>
             </button>
             <button
               onClick={() => {

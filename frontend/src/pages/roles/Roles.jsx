@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, MoreVertical, Edit2, Trash2, Shield, AlertTriangle, X, Globe, Folder, GraduationCap } from "lucide-react";
+import { Plus, Search, MoreVertical, Edit2, Trash2, Shield, AlertTriangle, X, Globe, Folder, GraduationCap, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -509,6 +509,7 @@ export default function Roles() {
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [roleDependencies, setRoleDependencies] = useState({ users: 0, items: 0 });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPreparingDelete, setIsPreparingDelete] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -566,6 +567,7 @@ export default function Roles() {
 
   const confirmDelete = async (role) => {
     try {
+      setIsPreparingDelete(true);
       const depsRes = await getRoleDependencies(role._id);
       setRoleDependencies(depsRes.data || { users: 0, items: 0 });
       setRoleToDelete(role);
@@ -575,6 +577,8 @@ export default function Roles() {
       setRoleToDelete(role);
       setRoleDependencies({ users: 0, items: role.itemIds?.length || 0 });
       setDeleteModalOpen(true);
+    } finally {
+      setIsPreparingDelete(false);
     }
   };
 
@@ -754,9 +758,9 @@ export default function Roles() {
                               <Edit2 size={14} className="mr-2" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-rose-600" onClick={() => confirmDelete(role)}>
-                              <Trash2 size={14} className="mr-2" />
-                              Delete
+                          <DropdownMenuItem className="text-rose-600" onClick={() => confirmDelete(role)}>
+                              {isPreparingDelete ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Trash2 size={14} className="mr-2" />}
+                              {isPreparingDelete ? "Preparing..." : "Delete"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
