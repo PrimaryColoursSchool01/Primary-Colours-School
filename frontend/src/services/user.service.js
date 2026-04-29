@@ -20,8 +20,8 @@ export const updateUser = async (id, payload) => {
   return data;
 };
 
-export const deleteUser = async (id) => {
-  const { data } = await api.delete(`/users/${id}`);
+export const markUserNoLongerWorking = async (id) => {
+  const { data } = await api.post(`/users/${id}/no-longer-working`);
   return data;
 };
 

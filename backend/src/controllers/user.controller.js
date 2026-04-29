@@ -179,7 +179,7 @@ export const getAllUsers = async (req, res, next) => {
       filter.userType = userType;
     }
 
-    if (status && ["active", "suspended"].includes(status)) {
+    if (status && ["active", "suspended", "inactive"].includes(status)) {
       filter.status = status;
     }
 
@@ -417,7 +417,7 @@ export const updateUserById = async (req, res, next) => {
     }
 
     if (status !== undefined) {
-      if (!["active", "suspended"].includes(status)) {
+      if (!["active", "suspended", "inactive"].includes(status)) {
         const err = new Error("Invalid status");
         err.statusCode = 400;
         return next(err);
@@ -430,6 +430,14 @@ export const updateUserById = async (req, res, next) => {
 
       if (status === "active" && user.suspendedAt) {
         user.suspendedAt = null;
+      }
+
+      if (status === "inactive" && !user.inactiveAt) {
+        user.inactiveAt = new Date();
+      }
+
+      if (status === "active" && user.inactiveAt) {
+        user.inactiveAt = null;
       }
     }
 
@@ -474,6 +482,12 @@ export const suspendUser = async (req, res, next) => {
 
     if (user.status === "suspended") {
       const err = new Error("User is already suspended");
+      err.statusCode = 400;
+      return next(err);
+    }
+
+    if (user.status === "inactive") {
+      const err = new Error("User is no longer working and cannot be suspended");
       err.statusCode = 400;
       return next(err);
     }
@@ -586,7 +600,7 @@ export const unsuspendUser = async (req, res, next) => {
   }
 };
 
-export const deleteUserById = async (req, res, next) => {
+export const markUserNoLongerWorking = async (req, res, next) => {
   const { id } = req.params;
 
   if (!id) {
@@ -603,21 +617,30 @@ export const deleteUserById = async (req, res, next) => {
       return next(err);
     }
 
+    if (user.status === "inactive") {
+      const err = new Error("User is already marked as no longer working");
+      err.statusCode = 400;
+      return next(err);
+    }
+
     if (user.userType === "admin") {
-      const adminCount = await User.countDocuments({ userType: "admin", _id: { $ne: id } });
+      const adminCount = await User.countDocuments({ userType: "admin", status: "active", _id: { $ne: id } });
       if (adminCount === 0) {
-        const err = new Error("Cannot delete the last admin user");
+        const err = new Error("Cannot mark the last active admin as no longer working");
         err.statusCode = 400;
         return next(err);
       }
     }
 
-    const deletedUser = await User.findByIdAndDelete(id);
+    user.status = "inactive";
+    user.inactiveAt = new Date();
+    user.suspendedAt = null;
+    await user.save();
 
-    // Soft cleanup: remove user from all transactions
+    // Cleanup: remove user from all transactions
     await ItemTransaction.updateMany({ staffIds: id }, { $pull: { staffIds: id } });
 
-    //  FIX: Add statusHistory when setting no_staff
+    //  Add statusHistory when setting no_staff
     await ItemTransaction.updateMany(
       { staffIds: { $size: 0 }, status: { $in: ["pending", "no_staff", "no_role"] } },
       {
@@ -627,22 +650,24 @@ export const deleteUserById = async (req, res, next) => {
             status: "no_staff",
             changedBy: null,
             changedAt: new Date(),
-            reason: `Staff deleted — no remaining staff assigned (user: ${deletedUser.fullName})`,
+            reason: `Staff marked as no longer working — no remaining staff assigned (user: ${user.fullName})`,
           },
         },
       },
     );
 
     return res.status(200).json({
-      message: "User deleted successfully",
+      message: "User marked as no longer working",
       user: {
-        _id: deletedUser._id,
-        fullName: deletedUser.fullName,
-        email: deletedUser.email,
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        status: user.status,
+        inactiveAt: user.inactiveAt,
       },
     });
   } catch (error) {
-    console.error("Error deleting user:", error);
+    console.error("Error marking user as no longer working:", error);
     if (!error.statusCode) error.statusCode = 500;
     return next(error);
   }

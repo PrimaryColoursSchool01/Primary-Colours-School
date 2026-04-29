@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { deleteUser } from "@/services/user.service";
+import { markUserNoLongerWorking } from "@/services/user.service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ export default function DeleteConfirmModal({ open, onOpenChange, user, onSuccess
   const [loading, setLoading] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
 
-  const handleDelete = async () => {
+  const handleMarkNoLongerWorking = async () => {
     if (confirmEmail !== user?.email) {
       toast.error("Email does not match");
       return;
@@ -18,11 +18,11 @@ export default function DeleteConfirmModal({ open, onOpenChange, user, onSuccess
 
     setLoading(true);
     try {
-      await deleteUser(user._id);
-      toast.success("User deleted successfully");
+      await markUserNoLongerWorking(user._id);
+      toast.success("User marked as no longer working");
       onSuccess();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to delete user");
+      toast.error(error.response?.data?.message || "Failed to update user status");
       console.error(error);
     } finally {
       setLoading(false);
@@ -33,9 +33,9 @@ export default function DeleteConfirmModal({ open, onOpenChange, user, onSuccess
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-slate-900 dark:text-white text-base sm:text-lg">Delete User</DialogTitle>
+          <DialogTitle className="text-slate-900 dark:text-white text-base sm:text-lg">Mark as No Longer Working</DialogTitle>
           <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">
-            This action cannot be undone. The user will be permanently removed from the system.
+            This action keeps the account for records but removes active access and assignments.
           </DialogDescription>
         </DialogHeader>
 
@@ -70,11 +70,11 @@ export default function DeleteConfirmModal({ open, onOpenChange, user, onSuccess
             </Button>
             <Button
               type="button"
-              onClick={handleDelete}
+              onClick={handleMarkNoLongerWorking}
               disabled={loading || confirmEmail !== user?.email}
               className="bg-red-600 hover:bg-red-700 w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm"
             >
-              {loading ? "Deleting..." : "Delete User"}
+              {loading ? "Updating..." : "Confirm Status"}
             </Button>
           </div>
         </div>

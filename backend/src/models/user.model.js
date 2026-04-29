@@ -31,7 +31,7 @@ const userSchema = new mongoose.Schema(
     ],
     status: {
       type: String,
-      enum: ["active", "suspended"],
+      enum: ["active", "suspended", "inactive"],
       default: "active",
     },
     phone: {
@@ -40,6 +40,7 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
     suspendedAt: Date,
+    inactiveAt: Date,
     refreshToken: {
       type: String,
     },

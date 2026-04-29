@@ -5,7 +5,7 @@ import {
   getAllUsers,
   getUserById,
   updateUserById,
-  deleteUserById,
+  markUserNoLongerWorking,
   suspendUser,
   unsuspendUser,
   resetPassword,
@@ -26,7 +26,7 @@ router.get("/", getAllUsers);
 router.get("/:id", getUserById);
 router.post("/", registerUser);
 router.put("/:id", updateUserById);
-router.delete("/:id", deleteUserById);
+router.post("/:id/no-longer-working", markUserNoLongerWorking);
 
 // User status routes
 router.post("/:id/suspend", suspendUser);

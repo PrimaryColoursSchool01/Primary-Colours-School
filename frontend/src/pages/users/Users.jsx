@@ -155,7 +155,7 @@ export default function Users() {
     setResetModalOpen(true);
   };
 
-  const handleDeleteUser = (user) => {
+  const handleMarkNoLongerWorking = (user) => {
     setSelectedUser(user);
     setDeleteModalOpen(true);
   };
@@ -227,6 +227,7 @@ export default function Users() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="suspended">Suspended</SelectItem>
+                <SelectItem value="inactive">No Longer Working</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -238,7 +239,7 @@ export default function Users() {
           loading={false} // loading is already handled by the outer skeleton, so table never sees a loading state
           onEdit={handleEditUser}
           onResetPassword={handleResetPassword}
-          onDelete={handleDeleteUser}
+          onMarkNoLongerWorking={handleMarkNoLongerWorking}
           onSuspend={handleSuspendUser}
         />
 

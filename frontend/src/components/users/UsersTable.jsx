@@ -1,10 +1,10 @@
-import { MoreHorizontal, Pencil, Key, Power, Trash2, Mail, User, BadgeCheck, Calendar } from "lucide-react";
+import { MoreHorizontal, Pencil, Key, Power, UserX, Mail, User, BadgeCheck, Calendar } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Badge } from "../ui/badge";
 
-export default function UsersTable({ users, loading, onEdit, onResetPassword, onDelete, onSuspend }) {
+export default function UsersTable({ users, loading, onEdit, onResetPassword, onMarkNoLongerWorking, onSuspend }) {
   if (loading) {
     return (
       <div className="border border-slate-200 dark:border-slate-800 rounded-lg">
@@ -120,20 +120,24 @@ export default function UsersTable({ users, loading, onEdit, onResetPassword, on
                         <Key size={16} className="mr-2" />
                         Reset Password
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => onSuspend(user)}
-                        className="text-orange-600 dark:text-orange-400 focus:bg-slate-100 dark:focus:bg-slate-800"
-                      >
-                        <Power size={16} className="mr-2" />
-                        {user.status === "suspended" ? "Unsuspend" : "Suspend"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => onDelete(user)}
-                        className="text-red-600 dark:text-red-400 focus:bg-slate-100 dark:focus:bg-slate-800"
-                      >
-                        <Trash2 size={16} className="mr-2" />
-                        Delete
-                      </DropdownMenuItem>
+                      {user.status !== "inactive" && (
+                        <DropdownMenuItem
+                          onClick={() => onSuspend(user)}
+                          className="text-orange-600 dark:text-orange-400 focus:bg-slate-100 dark:focus:bg-slate-800"
+                        >
+                          <Power size={16} className="mr-2" />
+                          {user.status === "suspended" ? "Unsuspend" : "Suspend"}
+                        </DropdownMenuItem>
+                      )}
+                      {user.status !== "inactive" && (
+                        <DropdownMenuItem
+                          onClick={() => onMarkNoLongerWorking(user)}
+                          className="text-red-600 dark:text-red-400 focus:bg-slate-100 dark:focus:bg-slate-800"
+                        >
+                          <UserX size={16} className="mr-2" />
+                          No Longer Working
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -181,20 +185,24 @@ export default function UsersTable({ users, loading, onEdit, onResetPassword, on
                     <Key size={16} className="mr-2" />
                     Reset Password
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onSuspend(user)}
-                    className="text-orange-600 dark:text-orange-400 focus:bg-slate-100 dark:focus:bg-slate-800"
-                  >
-                    <Power size={16} className="mr-2" />
-                    {user.status === "suspended" ? "Unsuspend" : "Suspend"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onDelete(user)}
-                    className="text-red-600 dark:text-red-400 focus:bg-slate-100 dark:focus:bg-slate-800"
-                  >
-                    <Trash2 size={16} className="mr-2" />
-                    Delete
-                  </DropdownMenuItem>
+                  {user.status !== "inactive" && (
+                    <DropdownMenuItem
+                      onClick={() => onSuspend(user)}
+                      className="text-orange-600 dark:text-orange-400 focus:bg-slate-100 dark:focus:bg-slate-800"
+                    >
+                      <Power size={16} className="mr-2" />
+                      {user.status === "suspended" ? "Unsuspend" : "Suspend"}
+                    </DropdownMenuItem>
+                  )}
+                  {user.status !== "inactive" && (
+                    <DropdownMenuItem
+                      onClick={() => onMarkNoLongerWorking(user)}
+                      className="text-red-600 dark:text-red-400 focus:bg-slate-100 dark:focus:bg-slate-800"
+                    >
+                      <UserX size={16} className="mr-2" />
+                      No Longer Working
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
