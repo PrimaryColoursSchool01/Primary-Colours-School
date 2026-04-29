@@ -353,7 +353,7 @@ export default function StaffHistory() {
 
         {/* ── Search + Filter Bar ──────────────────────────────────── */}
         <div className="fade-up-1 space-y-2">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="search-wrap relative flex-1">
               <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
               <Input
@@ -374,7 +374,7 @@ export default function StaffHistory() {
                 </button>
               )}
             </div>
-            <Button onClick={handleSearch} className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4">
+            <Button onClick={handleSearch} className="h-11 w-full sm:w-auto rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4">
               Search
             </Button>
 
@@ -383,7 +383,7 @@ export default function StaffHistory() {
               className={`filter-pill flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-all ${showFilters || hasCustomDateRange ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-200 bg-white text-slate-600"}`}
             >
               <SlidersHorizontal className="h-4 w-4" />
-              <span className="hidden sm:inline">Date Range</span>
+              <span>Date Range</span>
               {hasCustomDateRange && !showFilters && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/30 text-xs font-bold">✓</span>
               )}
@@ -407,6 +407,7 @@ export default function StaffHistory() {
                     onChange={(e) => setStartDate(e.target.value)}
                     className="date-input h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 transition-all"
                   />
+                  <p className="text-[11px] text-slate-400">Tap to select a start date</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
@@ -420,6 +421,7 @@ export default function StaffHistory() {
                     onChange={(e) => setEndDate(e.target.value)}
                     className="date-input h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 transition-all"
                   />
+                  <p className="text-[11px] text-slate-400">Tap to select an end date</p>
                 </div>
               </div>
               <div className="flex gap-2 pt-1">

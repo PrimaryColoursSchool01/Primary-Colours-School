@@ -443,7 +443,7 @@ export default function StaffAssignments() {
 
         {/* ── Search Bar Only (No Filters) ───────────────────────────── */}
         <div className="fade-up-1">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="search-wrap relative flex-1">
               <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
               <Input
@@ -464,7 +464,7 @@ export default function StaffAssignments() {
                 </button>
               )}
             </div>
-            <Button onClick={handleSearch} className="h-11 rounded-xl bg-[#136dec] hover:bg-[#0f5bbd] text-white px-4">
+            <Button onClick={handleSearch} className="h-11 w-full sm:w-auto rounded-xl bg-[#136dec] hover:bg-[#0f5bbd] text-white px-4">
               Search
             </Button>
           </div>
