@@ -398,9 +398,9 @@ function DashboardLoading({ stage }) {
 }
 
 // ─── Empty State ───────────────────────────────────────────────────────────
-function EmptyState({ message, onRetry }) {
+function EmptyState({ message, onRetry, compact = false }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-8">
+    <div className={`w-full h-full flex flex-col items-center justify-center text-slate-400 ${compact ? "p-4" : "p-8"}`}>
       <Package size={32} className="mb-3 opacity-50" />
       <p className="text-sm font-medium text-center mb-4">{message}</p>
       {onRetry && (
@@ -538,8 +538,8 @@ export default function Dashboard() {
     {
       label: "Total",
       value: stats.total.toLocaleString(),
-      badge: "+12.5%",
-      badgeColor: "text-emerald-600 bg-emerald-50",
+      badge: stats.total > 0 ? "Active" : "No data",
+      badgeColor: stats.total > 0 ? "text-emerald-600 bg-emerald-50" : "text-slate-500 bg-slate-100",
       iconBg: "bg-[#136dec]/10",
       iconColor: "text-[#136dec]",
       icon: BarChart2,
@@ -574,8 +574,8 @@ export default function Dashboard() {
     {
       label: "Rejected",
       value: stats.rejected.toLocaleString(),
-      badge: "-2%",
-      badgeColor: "text-rose-600 bg-rose-50",
+      badge: stats.total > 0 ? `${Math.round((stats.rejected / stats.total) * 100)}%` : "0%",
+      badgeColor: stats.total > 0 ? "text-rose-600 bg-rose-50" : "text-slate-500 bg-slate-100",
       iconBg: "bg-rose-50",
       iconColor: "text-rose-500",
       icon: XCircle,
@@ -760,7 +760,7 @@ export default function Dashboard() {
             {pipelineStatus.length > 0 ? (
               pipelineStatus.map((stage) => <PipelineStage key={stage.stage} stage={stage} />)
             ) : (
-              <EmptyState message="No pipeline data available" onRetry={loadDashboardData} />
+              <EmptyState message="No pipeline data available" onRetry={loadDashboardData} compact />
             )}
           </div>
         </div>
