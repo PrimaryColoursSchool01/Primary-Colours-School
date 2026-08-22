@@ -46,6 +46,7 @@ const paymentRecordSchema = new mongoose.Schema(
     rejectionReason: { type: String, trim: true, default: null },
     rejectedAt: { type: Date, default: null },
     rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    amountReceived: { type: Number, default: null, min: 0 },
 
     // ── PAYMENT EVIDENCE (Flat structure, zero red lines) ───────────────
     paymentEvidenceType: {

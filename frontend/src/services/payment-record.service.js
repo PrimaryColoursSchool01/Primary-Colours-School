@@ -15,18 +15,28 @@ export const getPaymentRecordById = async (id) => {
   return data;
 };
 
-export const acceptPaymentItems = async (id, acceptedItemIds) => {
+export const acceptPaymentItems = async (id, acceptedItemIds, amountReceived) => {
   const { data } = await api.put(`/payment-records/${id}`, {
     action: "accept",
     acceptedItemIds,
+    amountReceived,
   });
   return data;
 };
 
-export const rejectPaymentRecord = async (id, rejectionReason) => {
+export const rejectPaymentRecord = async (id, rejectionReason, amountReceived) => {
   const { data } = await api.put(`/payment-records/${id}`, {
     action: "reject",
     rejectionReason,
+    amountReceived,
+  });
+  return data;
+};
+
+export const updateAmountReceived = async (id, amountReceived) => {
+  const { data } = await api.put(`/payment-records/${id}`, {
+    action: "update-amount",
+    amountReceived,
   });
   return data;
 };
