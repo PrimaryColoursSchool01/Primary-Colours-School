@@ -16,13 +16,15 @@ import {
   Database,
   RefreshCw,
   Share2,
+  ChevronDown,
 } from "lucide-react";
-import { getAllPaymentRecords, acceptPaymentItems, rejectPaymentRecord } from "@/services/payment-record.service";
+import { getAllPaymentRecords, acceptPaymentItems, rejectPaymentRecord, updateAmountReceived } from "@/services/payment-record.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import jsPDF from "jspdf";
@@ -49,8 +51,11 @@ export default function Responses() {
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [amountReceived, setAmountReceived] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // { type: "accept"|"update-amount", itemIds: [] }
 
   const hasActiveFilters = appliedSearch.trim() !== "" || status !== "all" || startDate !== "" || endDate !== "";
 
@@ -79,7 +84,6 @@ export default function Responses() {
 
       if (!isRefetch) {
         setLoadingStage("ready");
-        toast.success("Payment records loaded");
       }
     } catch (error) {
       console.error("Failed to load payment records:", error);
@@ -122,14 +126,52 @@ export default function Responses() {
       toast.error("Please select at least one item to accept");
       return;
     }
+    const parsed = parseFloat(amountReceived.replace(/,/g, ""));
+    if (!amountReceived || isNaN(parsed) || parsed <= 0) {
+      toast.error("Please enter the amount received from the parent");
+      return;
+    }
+    setPendingAction({ type: "accept", itemIds: selectedItemIds });
+    setConfirmModalOpen(true);
+  };
+
+  const handleUpdateAmount = () => {
+    const parsed = parseFloat(amountReceived.replace(/,/g, ""));
+    if (!amountReceived || isNaN(parsed) || parsed <= 0) {
+      toast.error("Please enter the amount received from the parent");
+      return;
+    }
+    setPendingAction({ type: "update-amount", itemIds: [] });
+    setConfirmModalOpen(true);
+  };
+
+  const handleConfirm = async () => {
+    if (!pendingAction) return;
+    const parsed = parseFloat(amountReceived.replace(/,/g, ""));
     try {
       setActionLoading(true);
-      await acceptPaymentItems(selectedRecord._id, selectedItemIds);
-      toast.success("Items accepted successfully");
-      setDetailModalOpen(false);
-      fetchPaymentRecords(true);
+      if (pendingAction.type === "accept") {
+        const res = await acceptPaymentItems(selectedRecord._id, pendingAction.itemIds, parsed);
+        toast.success("Payment accepted successfully");
+        // Keep modal open — refresh the record in place so receipt button appears
+        setSelectedRecord(res.paymentRecord);
+        setSelectedItemIds([]);
+        setAmountReceived("");
+        setConfirmModalOpen(false);
+        setPendingAction(null);
+        fetchPaymentRecords(true); // refresh background list silently
+      } else if (pendingAction.type === "update-amount") {
+        const res = await updateAmountReceived(selectedRecord._id, parsed);
+        toast.success("Payment amount updated");
+        // Keep modal open — refresh the record in place
+        setSelectedRecord(res.paymentRecord);
+        setAmountReceived("");
+        setConfirmModalOpen(false);
+        setPendingAction(null);
+        fetchPaymentRecords(true);
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to accept items");
+      toast.error(error.response?.data?.message || "Something went wrong");
     } finally {
       setActionLoading(false);
     }
@@ -140,10 +182,16 @@ export default function Responses() {
       toast.error("Please provide a rejection reason");
       return;
     }
+    const parsed = parseFloat(amountReceived.replace(/,/g, ""));
+    if (!amountReceived || isNaN(parsed) || parsed < 0) {
+      toast.error("Please enter the amount received from the parent");
+      return;
+    }
     try {
       setActionLoading(true);
-      await rejectPaymentRecord(selectedRecord._id, rejectionReason);
+      await rejectPaymentRecord(selectedRecord._id, rejectionReason, parsed);
       toast.success("Payment record rejected");
+      setAmountReceived("");
       setRejectModalOpen(false);
       setDetailModalOpen(false);
       fetchPaymentRecords(true);
@@ -157,6 +205,25 @@ export default function Responses() {
   const openRejectModal = () => {
     setRejectionReason("");
     setRejectModalOpen(true);
+  };
+
+  // ── Live preview calculations ──────────────────────────────────────────
+  const amountReceivedNum = parseFloat(amountReceived.replace(/,/g, "")) || 0;
+  const previouslyReceived = selectedRecord?.amountReceived || 0;
+  const newTotalReceived = previouslyReceived + amountReceivedNum;
+  const newOutstanding = Math.max(0, (selectedRecord?.totalAmount || 0) - newTotalReceived);
+  const showPreview = amountReceivedNum > 0;
+
+  // ── Format number with commas for display ─────────────────────────────
+  const formatWithCommas = (value) => {
+    const digits = value.replace(/[^0-9]/g, "");
+    if (!digits) return "";
+    return Number(digits).toLocaleString("en-NG");
+  };
+
+  const handleAmountChange = (e) => {
+    const formatted = formatWithCommas(e.target.value);
+    setAmountReceived(formatted);
   };
 
   const handleClearDates = () => {
@@ -291,13 +358,17 @@ export default function Responses() {
   // ──────────────────────────────────────────────────────────────────────────
   // Updated: Thermal Receipt-style PDF – now shares natively with fallback
   // ──────────────────────────────────────────────────────────────────────────
-  const generateReceiptPDF = async (record) => {
+  const generateReceiptPDF = async (record, mode = "share") => {
     const acceptedItems = record.items.filter((item) => item.status === "accepted");
+    const outstandingItems = record.items.filter((item) => item.status === "pending");
+    const isPartial = record.status === "partially_accepted";
 
     // ── Dynamic page height based on item count ────────────────
     const baseHeight = 170;
     const perItemHeight = 10;
-    const pageHeight = baseHeight + acceptedItems.length * perItemHeight;
+    // Extra height for outstanding section if partial
+    const outstandingExtra = isPartial ? outstandingItems.length * perItemHeight + 30 : 0;
+    const pageHeight = baseHeight + acceptedItems.length * perItemHeight + outstandingExtra;
 
     const doc = new jsPDF({
       orientation: "portrait",
@@ -482,12 +553,12 @@ export default function Responses() {
     solidLine(y);
     y += 4;
 
-    // ── ITEMS ──────────────────────────────────────────────────
-    let subtotal = 0;
+    // ── ACCEPTED ITEMS ─────────────────────────────────────────
+    let amountPaid = 0;
     acceptedItems.forEach((item) => {
       const itemName = item.itemId?.name || "Item";
       const amount = item.quantity * item.amountAtPayment;
-      subtotal += amount;
+      amountPaid += amount;
 
       const lines = doc.splitTextToSize(itemName, 38);
       doc
@@ -504,21 +575,120 @@ export default function Responses() {
     solidLine(y);
     y += 5;
 
-    // ── TOTAL ──────────────────────────────────────────────────
-    doc.setFillColor(235, 244, 255);
-    doc.roundedRect(margin, y - 1.5, pageW - margin * 2, 10, 1, 1, "F");
+    // ── OUTSTANDING ITEMS (partial payments only) ──────────────
+    let outstandingAmount = 0;
+    if (isPartial && outstandingItems.length > 0) {
+      // Section header
+      doc
+        .setFontSize(6.5)
+        .setFont("helvetica", "bold")
+        .setTextColor(220, 38, 38) // red
+        .text("OUTSTANDING ITEMS", margin, y);
+      y += 4;
 
-    doc
-      .setFontSize(8)
-      .setFont("helvetica", "bold")
-      .setTextColor(...PRIMARY)
-      .text("TOTAL PAID", margin + 3, y + 5);
-    doc
-      .setFontSize(8)
-      .setFont("helvetica", "bold")
-      .setTextColor(12, 85, 180)
-      .text(formatCurrencyPDF(subtotal), pageW - margin - 3, y + 5, { align: "right" });
-    y += 14;
+      doc
+        .setFontSize(6)
+        .setFont("helvetica", "bold")
+        .setTextColor(...GRAY);
+      doc.text("DESCRIPTION", margin, y);
+      doc.text("QTY", pageW / 2 + 5, y, { align: "center" });
+      doc.text("AMOUNT", pageW - margin, y, { align: "right" });
+      y += 2;
+
+      solidLine(y, [220, 38, 38]);
+      y += 4;
+
+      outstandingItems.forEach((item) => {
+        const itemName = item.itemId?.name || "Item";
+        const amount = item.quantity * item.amountAtPayment;
+        outstandingAmount += amount;
+
+        const lines = doc.splitTextToSize(itemName, 38);
+        doc
+          .setFontSize(6.5)
+          .setFont("helvetica", "normal")
+          .setTextColor(...BLACK);
+        doc.text(lines, margin, y);
+        doc.text(`x${item.quantity}`, pageW / 2 + 5, y, { align: "center" });
+        doc
+          .setTextColor(220, 38, 38)
+          .text(formatCurrencyPDF(amount), pageW - margin, y, { align: "right" });
+        y += lines.length * 4 + 1;
+      });
+
+      y += 2;
+      solidLine(y, [220, 38, 38]);
+      y += 5;
+    }
+
+    // ── TOTALS ─────────────────────────────────────────────────
+    const totalSubmitted = record.totalAmount;
+    const actualAmountReceived = record.amountReceived ?? amountPaid;
+    const outstandingBalance = Math.max(0, totalSubmitted - actualAmountReceived);
+
+    if (isPartial || (record.amountReceived !== null && record.amountReceived !== undefined)) {
+      // Three-line summary — shows when payment is partial OR amountReceived is recorded
+      // Total Submitted row
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(margin, y - 1.5, pageW - margin * 2, 8, 1, 1, "F");
+      doc
+        .setFontSize(6.5)
+        .setFont("helvetica", "normal")
+        .setTextColor(...GRAY)
+        .text("Total Fees", margin + 3, y + 4);
+      doc
+        .setFont("helvetica", "bold")
+        .setTextColor(...BLACK)
+        .text(formatCurrencyPDF(totalSubmitted), pageW - margin - 3, y + 4, { align: "right" });
+      y += 10;
+
+      // Amount Received row
+      doc.setFillColor(240, 253, 244);
+      doc.roundedRect(margin, y - 1.5, pageW - margin * 2, 8, 1, 1, "F");
+      doc
+        .setFontSize(6.5)
+        .setFont("helvetica", "normal")
+        .setTextColor(...GRAY)
+        .text("Amount Received", margin + 3, y + 4);
+      doc
+        .setFont("helvetica", "bold")
+        .setTextColor(22, 163, 74)
+        .text(formatCurrencyPDF(actualAmountReceived), pageW - margin - 3, y + 4, { align: "right" });
+      y += 10;
+
+      // Outstanding Balance row
+      if (outstandingBalance > 0) {
+        doc.setFillColor(254, 242, 242);
+      } else {
+        doc.setFillColor(240, 253, 244);
+      }
+      doc.roundedRect(margin, y - 1.5, pageW - margin * 2, 10, 1, 1, "F");
+      doc
+        .setFontSize(7)
+        .setFont("helvetica", "bold")
+        .setTextColor(outstandingBalance > 0 ? 220 : 22, outstandingBalance > 0 ? 38 : 163, outstandingBalance > 0 ? 38 : 74)
+        .text("Outstanding Balance", margin + 3, y + 5);
+      doc
+        .setFontSize(7)
+        .setFont("helvetica", "bold")
+        .text(formatCurrencyPDF(outstandingBalance), pageW - margin - 3, y + 5, { align: "right" });
+      y += 14;
+    } else {
+      // Single total for fully accepted payments with no outstanding
+      doc.setFillColor(235, 244, 255);
+      doc.roundedRect(margin, y - 1.5, pageW - margin * 2, 10, 1, 1, "F");
+      doc
+        .setFontSize(8)
+        .setFont("helvetica", "bold")
+        .setTextColor(...PRIMARY)
+        .text("TOTAL PAID", margin + 3, y + 5);
+      doc
+        .setFontSize(8)
+        .setFont("helvetica", "bold")
+        .setTextColor(12, 85, 180)
+        .text(formatCurrencyPDF(amountPaid), pageW - margin - 3, y + 5, { align: "right" });
+      y += 14;
+    }
 
     dashedLine(y);
     y += 6;
@@ -553,9 +723,15 @@ export default function Responses() {
     const dateStr = new Date(record.dateOfPayment).toISOString().slice(0, 10);
     const filename = `Receipt_${safePayer}_${safeChild}_${safeClass}_${dateStr}.pdf`;
 
-    // Convert to File and share (with download fallback)
-    const file = pdfToFile(doc, filename);
-    await sharePDF(file, filename);
+    if (mode === "download") {
+      // Direct download — no share sheet
+      doc.save(filename);
+      toast.success("Receipt downloaded");
+    } else {
+      // Share via Web Share API with download fallback
+      const file = pdfToFile(doc, filename);
+      await sharePDF(file, filename);
+    }
   };
 
   const handleExportPDF = () => {
@@ -1242,53 +1418,198 @@ export default function Responses() {
             </div>
           )}
 
-          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:justify-end gap-2">
+          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-2">
             {selectedRecord?.items?.some((item) => item.status === "pending") ? (
               <>
-                <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
-                  Cancel
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={openRejectModal}
-                  className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs sm:text-sm h-9"
-                >
-                  <XCircle size={14} className="mr-1.5 shrink-0" />
-                  <span className="truncate">Reject Pending</span>
-                </Button>
-                <Button
-                  onClick={handleAccept}
-                  disabled={selectedItemIds.length === 0 || actionLoading}
-                  className="w-full sm:w-auto bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
-                >
-                  {actionLoading ? <Loader2 size={14} className="mr-1.5 shrink-0 animate-spin" /> : <CheckCircle size={14} className="mr-1.5 shrink-0" />}
-                  <span className="truncate">{actionLoading ? "Processing..." : `Accept Selected (${selectedItemIds.length})`}</span>
-                </Button>
-              </>
-            ) : (
-              <>
-                {selectedRecord?.items?.some((item) => item.status === "accepted") && (
+                {/* Amount Received input — full width row above buttons */}
+                <div className="flex flex-col gap-2">
+                  {/* Show previously received if any */}
+                  {previouslyReceived > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+                      <span className="text-xs text-slate-500">Already received from this parent</span>
+                      <span className="text-xs font-semibold text-slate-700">₦{previouslyReceived.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                    <label className="text-xs font-medium text-slate-600 whitespace-nowrap shrink-0">
+                      How much did they pay now? (₦) <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="e.g. 25,000"
+                      value={amountReceived}
+                      onChange={handleAmountChange}
+                      className="h-9 text-xs flex-1"
+                    />
+                  </div>
+                  {/* Live preview */}
+                  {showPreview && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 space-y-1">
+                      <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">What this means</p>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-600">Paid now</span>
+                        <span className="font-medium text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-600">Total received from this parent</span>
+                        <span className="font-semibold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-600">Still owed</span>
+                        <span className={`font-semibold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                          ₦{newOutstanding.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Action buttons row */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="text-xs sm:text-sm h-9">
+                    Cancel
+                  </Button>
                   <Button
                     variant="outline"
-                    onClick={async () => {
-                      try {
-                        setReceiptLoading(true);
-                        await generateReceiptPDF(selectedRecord);
-                      } finally {
-                        setReceiptLoading(false);
-                      }
-                    }}
-                    disabled={receiptLoading}
-                    className="w-full sm:w-auto text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 text-xs sm:text-sm h-9"
+                    onClick={openRejectModal}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs sm:text-sm h-9"
                   >
-                    {receiptLoading ? <Loader2 size={14} className="mr-1.5 shrink-0 animate-spin" /> : <Share2 size={14} className="mr-1.5 shrink-0" />}
-                    <span className="truncate">{receiptLoading ? "Preparing..." : "Send Receipt"}</span>
+                    <XCircle size={14} className="mr-1 shrink-0" />
+                    <span className="truncate">Reject All Pending</span>
                   </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleUpdateAmount}
+                    disabled={actionLoading}
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 text-xs sm:text-sm h-9"
+                  >
+                    <span className="truncate">Record Payment Only</span>
+                  </Button>
+                  <Button
+                    onClick={handleAccept}
+                    disabled={selectedItemIds.length === 0 || actionLoading}
+                    className="bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
+                  >
+                    {actionLoading
+                      ? <Loader2 size={14} className="mr-1 shrink-0 animate-spin" />
+                      : <CheckCircle size={14} className="mr-1 shrink-0" />}
+                    <span className="truncate">{actionLoading ? "Processing..." : `Accept Items (${selectedItemIds.length})`}</span>
+                  </Button>
+                </div>
+                {/* Receipt button for partially accepted records that still have pending items */}
+                {selectedRecord?.status === "partially_accepted" && selectedRecord?.items?.some((item) => item.status === "accepted") && (
+                  <div className="flex justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          disabled={receiptLoading}
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 text-xs sm:text-sm h-9"
+                        >
+                          {receiptLoading
+                            ? <Loader2 size={14} className="mr-1.5 shrink-0 animate-spin" />
+                            : <Receipt size={14} className="mr-1.5 shrink-0" />}
+                          <span className="truncate">{receiptLoading ? "Preparing..." : "Receipt"}</span>
+                          <ChevronDown size={13} className="ml-1.5 shrink-0" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              setReceiptLoading(true);
+                              await generateReceiptPDF(selectedRecord, "share");
+                            } catch (err) {
+                              console.error("Receipt generation failed:", err);
+                              toast.error("Failed to generate receipt");
+                            } finally {
+                              setReceiptLoading(false);
+                            }
+                          }}
+                        >
+                          <Share2 size={13} className="mr-2" />
+                          Send Receipt
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              setReceiptLoading(true);
+                              await generateReceiptPDF(selectedRecord, "download");
+                            } catch (err) {
+                              console.error("Receipt generation failed:", err);
+                              toast.error("Failed to generate receipt");
+                            } finally {
+                              setReceiptLoading(false);
+                            }
+                          }}
+                        >
+                          <Download size={13} className="mr-2" />
+                          Download
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
+                {selectedRecord?.items?.some((item) => item.status === "accepted") && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        disabled={receiptLoading}
+                        className="w-full sm:w-auto text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 text-xs sm:text-sm h-9"
+                      >
+                        {receiptLoading
+                          ? <Loader2 size={14} className="mr-1.5 shrink-0 animate-spin" />
+                          : <Receipt size={14} className="mr-1.5 shrink-0" />}
+                        <span className="truncate">{receiptLoading ? "Preparing..." : "Receipt"}</span>
+                        <ChevronDown size={13} className="ml-1.5 shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          try {
+                            setReceiptLoading(true);
+                            await generateReceiptPDF(selectedRecord, "share");
+                          } catch (err) {
+                            console.error("Receipt generation failed:", err);
+                            toast.error("Failed to generate receipt");
+                          } finally {
+                            setReceiptLoading(false);
+                          }
+                        }}
+                      >
+                        <Share2 size={13} className="mr-2" />
+                        Send Receipt
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          try {
+                            setReceiptLoading(true);
+                            await generateReceiptPDF(selectedRecord, "download");
+                          } catch (err) {
+                            console.error("Receipt generation failed:", err);
+                            toast.error("Failed to generate receipt");
+                          } finally {
+                            setReceiptLoading(false);
+                          }
+                        }}
+                      >
+                        <Download size={13} className="mr-2" />
+                        Download
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-9">
                   Close
                 </Button>
-              </>
+              </div>
             )}
           </div>
         </DialogContent>
@@ -1311,7 +1632,19 @@ export default function Responses() {
               </p>
             </div>
             <div className="space-y-2">
-              <label className="text-xs sm:text-sm font-medium">Rejection Reason</label>
+              <label className="text-xs sm:text-sm font-medium">Amount Received (₦) <span className="text-red-500">*</span></label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g. 2,000"
+                value={amountReceived}
+                onChange={handleAmountChange}
+                className="text-xs sm:text-sm"
+              />
+              <p className="text-[10px] text-slate-400">Enter the exact amount received in the school's bank account</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs sm:text-sm font-medium">Rejection Reason <span className="text-red-500">*</span></label>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
@@ -1327,6 +1660,88 @@ export default function Responses() {
             </Button>
             <Button variant="destructive" onClick={handleReject} disabled={actionLoading} className="w-full sm:w-auto text-xs sm:text-sm h-9">
               {actionLoading ? "Processing..." : "Reject Pending Items"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Modal */}
+      <Dialog open={confirmModalOpen} onOpenChange={(open) => { if (!open) { setConfirmModalOpen(false); setPendingAction(null); } }}>
+        <DialogContent className="w-[95vw] sm:w-[85vw] max-w-md p-4 sm:p-6">
+          <DialogHeader className="mb-3 pb-3 border-b">
+            <DialogTitle className="text-sm sm:text-base font-semibold">
+              {pendingAction?.type === "accept" ? "Confirm Payment Acceptance" : "Confirm Payment Recording"}
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Please check the details below before confirming.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* Payment breakdown */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200">
+              <div className="flex justify-between px-3 py-2">
+                <span className="text-xs text-slate-500">Amount paid now</span>
+                <span className="text-xs font-semibold text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
+              </div>
+              {previouslyReceived > 0 && (
+                <div className="flex justify-between px-3 py-2">
+                  <span className="text-xs text-slate-500">Previously received</span>
+                  <span className="text-xs font-medium text-slate-600">₦{previouslyReceived.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between px-3 py-2 bg-green-50">
+                <span className="text-xs font-medium text-slate-700">Total received from this parent</span>
+                <span className="text-xs font-bold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
+              </div>
+              <div className={`flex justify-between px-3 py-2 ${newOutstanding > 0 ? "bg-red-50" : "bg-green-50"}`}>
+                <span className="text-xs font-medium text-slate-700">Still owed</span>
+                <span className={`text-xs font-bold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                  ₦{newOutstanding.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Items being accepted */}
+            {pendingAction?.type === "accept" && pendingAction.itemIds.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-slate-600">Items being approved:</p>
+                {selectedRecord?.items
+                  ?.filter((item) => pendingAction.itemIds.includes(item._id))
+                  .map((item) => (
+                    <div key={item._id} className="flex justify-between px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-100">
+                      <span className="text-xs text-slate-700">{item.itemId?.name || "Item"}</span>
+                      <span className="text-xs font-medium text-slate-700">₦{item.amountAtPayment.toLocaleString()}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {pendingAction?.type === "update-amount" && (
+              <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <p className="text-xs text-blue-700">
+                  No items will be approved. Only the payment amount will be updated on this record.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
+            <Button
+              variant="outline"
+              onClick={() => { setConfirmModalOpen(false); setPendingAction(null); }}
+              className="flex-1 text-xs sm:text-sm h-9"
+            >
+              Go Back
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={actionLoading}
+              className="flex-1 bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
+            >
+              {actionLoading
+                ? <><Loader2 size={14} className="mr-1.5 animate-spin" /> Processing...</>
+                : "Yes, Confirm"}
             </Button>
           </div>
         </DialogContent>
