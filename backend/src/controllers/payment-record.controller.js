@@ -284,8 +284,16 @@ export const updatePaymentRecordById = async (req, res, next) => {
     return next(err);
   }
 
-  // amountReceived is required for accept and update-amount, optional for reject
-  if (action !== "reject") {
+  // amountReceived is required for accept only when not provided as undefined
+  if (action !== "reject" && action !== "update-amount") {
+    if (amountReceived !== undefined && amountReceived !== null && amountReceived !== "") {
+      if (isNaN(Number(amountReceived)) || Number(amountReceived) < 0) {
+        const err = new Error("Amount received must be a valid positive number");
+        err.statusCode = 400;
+        return next(err);
+      }
+    }
+  } else if (action === "update-amount") {
     if (amountReceived === undefined || amountReceived === null || amountReceived === "") {
       const err = new Error("Amount received is required");
       err.statusCode = 400;
@@ -383,7 +391,10 @@ export const updatePaymentRecordById = async (req, res, next) => {
     // Do NOT manually set paymentRecord.status — middleware auto-calculates it
     paymentRecord.acceptedAt = new Date();
     paymentRecord.acceptedBy = req.user.id;
-    paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
+    // Only accumulate amountReceived if it was provided (debt not yet cleared)
+    if (amountReceived !== undefined && amountReceived !== null && amountReceived !== "") {
+      paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
+    }
 
     await paymentRecord.save();
 

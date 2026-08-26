@@ -126,10 +126,13 @@ export default function Responses() {
       toast.error("Please select at least one item to accept");
       return;
     }
-    const parsed = parseFloat(amountReceived.replace(/,/g, ""));
-    if (!amountReceived || isNaN(parsed) || parsed <= 0) {
-      toast.error("Please enter the amount received from the parent");
-      return;
+    // Only require amount if debt is not yet cleared
+    if (!debtCleared) {
+      const parsed = parseFloat(amountReceived.replace(/,/g, ""));
+      if (!amountReceived || isNaN(parsed) || parsed <= 0) {
+        toast.error("Please enter the amount received from the parent");
+        return;
+      }
     }
     setPendingAction({ type: "accept", itemIds: selectedItemIds });
     setConfirmModalOpen(true);
@@ -147,23 +150,23 @@ export default function Responses() {
 
   const handleConfirm = async () => {
     if (!pendingAction) return;
-    const parsed = parseFloat(amountReceived.replace(/,/g, ""));
+    const parsed = parseFloat(amountReceived.replace(/,/g, "")) || 0;
     try {
       setActionLoading(true);
       if (pendingAction.type === "accept") {
-        const res = await acceptPaymentItems(selectedRecord._id, pendingAction.itemIds, parsed);
+        // Only send amountReceived if debt not cleared and amount was entered
+        const amountToSend = (!debtCleared && parsed > 0) ? parsed : undefined;
+        const res = await acceptPaymentItems(selectedRecord._id, pendingAction.itemIds, amountToSend);
         toast.success("Payment accepted successfully");
-        // Keep modal open — refresh the record in place so receipt button appears
         setSelectedRecord(res.paymentRecord);
         setSelectedItemIds([]);
         setAmountReceived("");
         setConfirmModalOpen(false);
         setPendingAction(null);
-        fetchPaymentRecords(true); // refresh background list silently
+        fetchPaymentRecords(true);
       } else if (pendingAction.type === "update-amount") {
         const res = await updateAmountReceived(selectedRecord._id, parsed);
         toast.success("Payment amount updated");
-        // Keep modal open — refresh the record in place
         setSelectedRecord(res.paymentRecord);
         setAmountReceived("");
         setConfirmModalOpen(false);
@@ -213,6 +216,7 @@ export default function Responses() {
   const newTotalReceived = previouslyReceived + amountReceivedNum;
   const newOutstanding = Math.max(0, (selectedRecord?.totalAmount || 0) - newTotalReceived);
   const showPreview = amountReceivedNum > 0;
+  const debtCleared = previouslyReceived >= (selectedRecord?.totalAmount || 0);
 
   // ── Format number with commas for display ─────────────────────────────
   const formatWithCommas = (value) => {
@@ -1421,49 +1425,59 @@ export default function Responses() {
           <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-2">
             {selectedRecord?.items?.some((item) => item.status === "pending") ? (
               <>
-                {/* Amount Received input — full width row above buttons */}
-                <div className="flex flex-col gap-2">
-                  {/* Show previously received if any */}
-                  {previouslyReceived > 0 && (
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
-                      <span className="text-xs text-slate-500">Already received from this parent</span>
-                      <span className="text-xs font-semibold text-slate-700">₦{previouslyReceived.toLocaleString()}</span>
+                {/* Amount Received input — only show if debt not cleared */}
+                {!debtCleared && (
+                  <div className="flex flex-col gap-2">
+                    {/* Show previously received if any */}
+                    {previouslyReceived > 0 && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <span className="text-xs text-slate-500">Already received from this parent</span>
+                        <span className="text-xs font-semibold text-slate-700">₦{previouslyReceived.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                      <label className="text-xs font-medium text-slate-600 whitespace-nowrap shrink-0">
+                        How much did they pay now? (₦) <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="e.g. 25,000"
+                        value={amountReceived}
+                        onChange={handleAmountChange}
+                        className="h-9 text-xs flex-1"
+                      />
                     </div>
-                  )}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                    <label className="text-xs font-medium text-slate-600 whitespace-nowrap shrink-0">
-                      How much did they pay now? (₦) <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="e.g. 25,000"
-                      value={amountReceived}
-                      onChange={handleAmountChange}
-                      className="h-9 text-xs flex-1"
-                    />
+                    {/* Live preview */}
+                    {showPreview && (
+                      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 space-y-1">
+                        <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">What this means</p>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-600">Paid now</span>
+                          <span className="font-medium text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-600">Total received from this parent</span>
+                          <span className="font-semibold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-600">Still owed</span>
+                          <span className={`font-semibold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                            ₦{newOutstanding.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {/* Live preview */}
-                  {showPreview && (
-                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 space-y-1">
-                      <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">What this means</p>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-600">Paid now</span>
-                        <span className="font-medium text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-600">Total received from this parent</span>
-                        <span className="font-semibold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-600">Still owed</span>
-                        <span className={`font-semibold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
-                          ₦{newOutstanding.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
+
+                {/* Debt cleared banner */}
+                {debtCleared && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                    <CheckCircle size={14} className="text-green-600 shrink-0" />
+                    <span className="text-xs text-green-700 font-medium">Full payment received — no outstanding balance</span>
+                  </div>
+                )}
                 {/* Action buttons row */}
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" onClick={() => setDetailModalOpen(false)} className="text-xs sm:text-sm h-9">
@@ -1479,18 +1493,20 @@ export default function Responses() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleUpdateAmount}
-                    disabled={actionLoading}
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 text-xs sm:text-sm h-9"
-                  >
-                    <span className="truncate">Record Payment Only</span>
-                  </Button>
+                  {!debtCleared && (
+                    <Button
+                      variant="outline"
+                      onClick={handleUpdateAmount}
+                      disabled={actionLoading}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 text-xs sm:text-sm h-9"
+                    >
+                      <span className="truncate">Record Payment Only</span>
+                    </Button>
+                  )}
                   <Button
                     onClick={handleAccept}
                     disabled={selectedItemIds.length === 0 || actionLoading}
-                    className="bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9"
+                    className={`bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9 ${debtCleared ? "col-span-2" : ""}`}
                   >
                     {actionLoading
                       ? <Loader2 size={14} className="mr-1 shrink-0 animate-spin" />
@@ -1678,28 +1694,37 @@ export default function Responses() {
           </DialogHeader>
 
           <div className="space-y-3">
-            {/* Payment breakdown */}
+            {/* Payment breakdown — only show if amount was entered or debt was already cleared */}
             <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200">
-              <div className="flex justify-between px-3 py-2">
-                <span className="text-xs text-slate-500">Amount paid now</span>
-                <span className="text-xs font-semibold text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
-              </div>
-              {previouslyReceived > 0 && (
-                <div className="flex justify-between px-3 py-2">
-                  <span className="text-xs text-slate-500">Previously received</span>
-                  <span className="text-xs font-medium text-slate-600">₦{previouslyReceived.toLocaleString()}</span>
+              {debtCleared ? (
+                <div className="flex justify-between px-3 py-2 bg-green-50">
+                  <span className="text-xs font-medium text-slate-700">Total received from this parent</span>
+                  <span className="text-xs font-bold text-green-700">₦{previouslyReceived.toLocaleString()}</span>
                 </div>
+              ) : (
+                <>
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-xs text-slate-500">Amount paid now</span>
+                    <span className="text-xs font-semibold text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
+                  </div>
+                  {previouslyReceived > 0 && (
+                    <div className="flex justify-between px-3 py-2">
+                      <span className="text-xs text-slate-500">Previously received</span>
+                      <span className="text-xs font-medium text-slate-600">₦{previouslyReceived.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between px-3 py-2 bg-green-50">
+                    <span className="text-xs font-medium text-slate-700">Total received from this parent</span>
+                    <span className="text-xs font-bold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
+                  </div>
+                  <div className={`flex justify-between px-3 py-2 ${newOutstanding > 0 ? "bg-red-50" : "bg-green-50"}`}>
+                    <span className="text-xs font-medium text-slate-700">Still owed</span>
+                    <span className={`text-xs font-bold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                      ₦{newOutstanding.toLocaleString()}
+                    </span>
+                  </div>
+                </>
               )}
-              <div className="flex justify-between px-3 py-2 bg-green-50">
-                <span className="text-xs font-medium text-slate-700">Total received from this parent</span>
-                <span className="text-xs font-bold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
-              </div>
-              <div className={`flex justify-between px-3 py-2 ${newOutstanding > 0 ? "bg-red-50" : "bg-green-50"}`}>
-                <span className="text-xs font-medium text-slate-700">Still owed</span>
-                <span className={`text-xs font-bold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
-                  ₦{newOutstanding.toLocaleString()}
-                </span>
-              </div>
             </div>
 
             {/* Items being accepted */}
