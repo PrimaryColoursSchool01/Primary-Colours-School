@@ -1727,6 +1727,16 @@ export default function Responses() {
               )}
             </div>
 
+            {/* Outstanding debt warning */}
+            {pendingAction?.type === "accept" && newOutstanding > 0 && !debtCleared && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">
+                  <span className="font-semibold">Note:</span> ₦{newOutstanding.toLocaleString()} will still be owed after this action. Make sure to follow up on the remaining balance.
+                </p>
+              </div>
+            )}
+
             {/* Items being accepted */}
             {pendingAction?.type === "accept" && pendingAction.itemIds.length > 0 && (
               <div className="space-y-1">
