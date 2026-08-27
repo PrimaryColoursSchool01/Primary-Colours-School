@@ -379,46 +379,42 @@ export default function StaffDashboard() {
                 <p className="mt-1 text-sm text-slate-400 max-w-xs">No pending items to distribute right now. Check back later.</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {priorityActions.map((item, idx) => (
-                  <div
-                    key={item.transactionId}
-                    className="action-row flex flex-row items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 sm:p-4"
-                    style={{ animationDelay: `${idx * 60}ms` }}
-                  >
-                    {/* Avatar */}
-                    <div
-                      className="flex-shrink-0 flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                      style={{
-                        background: `hsl(${(item.studentName.charCodeAt(0) * 37) % 360}, 55%, 52%)`,
-                      }}
-                    >
-                      {item.studentName.charAt(0).toUpperCase()}
-                    </div>
-
-                    {/* Details — takes all remaining space */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900 text-sm sm:text-base leading-snug truncate">{item.studentName}</p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <span className="text-xs text-slate-500 font-medium">{item.className}</span>
-                        <span className="text-slate-300 text-xs">•</span>
-                        <span className="text-xs text-[#136dec] font-semibold">{item.itemName}</span>
-                        <span className="text-slate-300 text-xs">×</span>
-                        <span className="text-xs font-bold text-slate-700">{item.quantity}</span>
+              <div className="space-y-3">
+                {priorityActions.map((group, idx) => (
+                  <div key={group.paymentRecordId} className="rounded-xl border border-slate-100 bg-slate-50/60 overflow-hidden" style={{ animationDelay: `${idx * 60}ms` }}>
+                    {/* Student header */}
+                    <div className="flex items-center gap-3 px-3.5 py-3">
+                      <div className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `hsl(${(group.studentName.charCodeAt(0) * 37) % 360}, 55%, 52%)` }}>
+                        {group.studentName.charAt(0).toUpperCase()}
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 text-sm truncate">{group.studentName}</p>
+                        <p className="text-xs text-slate-400">{group.className}</p>
+                      </div>
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white flex-shrink-0" style={{ background: "#136dec" }}>
+                        {group.items.length}
+                      </span>
                     </div>
-
-                    {/* Right: action button — never grows, never wraps */}
-                    <Button
-                      size="sm"
-                      className="collect-btn flex-shrink-0 h-9 rounded-lg px-3 sm:px-4 text-xs font-semibold text-white"
-                      style={{ background: "#136dec" }}
-                      onClick={() => handleOpenCollect(item)}
-                    >
-                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 hidden sm:inline-block" />
-                      <span className="hidden sm:inline">Mark Collected</span>
-                      <span className="sm:hidden">Collect</span>
-                    </Button>
+                    {/* Items */}
+                    <div className="border-t border-slate-100 divide-y divide-slate-50">
+                      {group.items.map((item) => (
+                        <div key={item.transactionId} className="flex items-center justify-between px-3.5 py-2.5 pl-[52px]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Package className="h-3.5 w-3.5 text-[#136dec] flex-shrink-0" />
+                            <span className="text-xs font-medium text-slate-700 truncate">{item.itemName}</span>
+                            <span className="flex-shrink-0 text-xs font-bold text-slate-400">×{item.quantity}</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="flex-shrink-0 h-7 rounded-lg px-2.5 text-xs font-semibold text-white ml-2"
+                            style={{ background: "#136dec" }}
+                            onClick={() => handleOpenCollect({ transactionId: item.transactionId, studentName: group.studentName, className: group.className, itemName: item.itemName, quantity: item.quantity })}
+                          >
+                            Collect
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

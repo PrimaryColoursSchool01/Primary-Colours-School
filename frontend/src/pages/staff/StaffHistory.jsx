@@ -204,7 +204,7 @@ export default function StaffHistory() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [transactions, setTransactions] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
@@ -239,7 +239,7 @@ export default function StaffHistory() {
         }
 
         const res = await getStaffHistory(params);
-        setTransactions(res.data.transactions || []);
+        setGroups(res.data.groups || []);
         setTotal(res.data.total || 0);
         setPage(res.data.page || 1);
         setPages(res.data.pages || 0);
@@ -472,6 +472,67 @@ export default function StaffHistory() {
         </div>
 
         {/* ── Content ─────────────────────────────────────────────── */}
+        <div className="fade-up-2">
+          {groups.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <EmptyState filtered={hasActiveFilters} onClear={handleClearFilters} />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {groups.map((group, idx) => (
+                <div key={group.paymentRecordId} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden" style={{ animationDelay: `${idx * 25}ms` }}>
+                  <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 bg-slate-50/50">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(group.studentName) }}>
+                      {group.studentName?.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 text-sm truncate">{group.studentName}</p>
+                      <p className="text-xs text-slate-400">{group.className}</p>
+                    </div>
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold flex-shrink-0" style={{ background: "#d1fae5", color: "#065f46" }}>
+                      {group.items.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {group.items.map((item) => (
+                      <div key={item.transactionId} className="px-4 py-3 pl-16">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold flex-shrink-0" style={{ background: "rgba(16,185,129,0.08)", color: "#059669" }}>
+                              <Package className="h-3 w-3" />{item.itemName}
+                            </span>
+                            <span className="rounded-md px-2 py-0.5 text-xs font-bold flex-shrink-0" style={{ background: "#f1f5f9", color: "#475569" }}>×{item.quantity}</span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                            <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(item.handedOverAt)}</span>
+                          </div>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="flex items-center gap-1 text-xs text-slate-400">
+                            <User className="h-3 w-3" />{item.handedOverBy}
+                          </span>
+                          {item.note && item.note !== "Marked as collected" && (
+                            <span className="text-xs italic text-slate-400 truncate max-w-[200px]" title={item.note}>"{item.note}"</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {pages > 1 && (
+                <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3">
+                  <Pagination page={page} pages={pages} total={total} limit={LIMIT} onPage={handlePage} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
         <div className="fade-up-2">
           {transactions.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">

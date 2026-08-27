@@ -6,59 +6,49 @@ import Item from "../models/items-fess.model.js";
 import Class from "../models/class.model.js";
 import User from "../models/user.model.js";
 
-// ─── Helpers: Transform data for frontend ─────────────────────────────────────
-
-function transformPriorityAction(tx) {
-  return {
-    transactionId: tx._id,
-    studentName: tx.paymentRecordId?.nameOfChild || "Unknown",
-    className: tx.paymentRecordId?.classId?.name || "N/A",
-    itemName: tx.itemId?.name || "Unknown Item",
-    quantity: tx.quantity,
-    status: tx.status,
-  };
-}
-
-function transformAssignment(tx) {
-  return {
-    id: tx._id,
-    studentName: tx.paymentRecordId?.nameOfChild || "Unknown",
-    className: tx.paymentRecordId?.classId?.name || "N/A",
-    dateOfPayment: tx.paymentRecordId?.dateOfPayment,
-    itemName: tx.itemId?.name || "Unknown Item",
-    quantity: tx.quantity,
-    status: tx.status,
-    createdAt: tx.createdAt,
-  };
-}
-
-function transformHistoryItem(tx) {
-  return {
-    id: tx._id,
-    studentName: tx.paymentRecordId?.nameOfChild || "Unknown",
-    className: tx.paymentRecordId?.classId?.name || "N/A",
-    itemName: tx.itemId?.name || "Unknown Item",
-    quantity: tx.quantity,
-    handedOverBy: tx.handedOverBy?.fullName || "System",
-    handedOverAt: tx.handedOverAt,
-    note: tx.statusHistory?.slice(-1)[0]?.reason || null,
-  };
-}
-
-// ─── Helpers: Permission resolution (SIMPLIFIED) ──────────────────────────────
+// ─── Helpers: Permission resolution ───────────────────────────────────────────
 
 const resolveStaffPermissions = (user) => {
   const authorizedItemIds = new Set();
-
-  // Just collect all item IDs from the user's roles — no scope filtering
   user.roles?.forEach((role) => {
     role.itemIds?.forEach((id) => authorizedItemIds.add(id.toString()));
   });
-
-  return {
-    authorizedItemIds: Array.from(authorizedItemIds),
-  };
+  return { authorizedItemIds: Array.from(authorizedItemIds) };
 };
+
+// ─── Helper: Group flat transactions by paymentRecordId ───────────────────────
+
+function groupTransactions(transactions) {
+  const groupMap = new Map();
+
+  for (const tx of transactions) {
+    const prId = tx.paymentRecordId?._id?.toString() || tx.paymentRecordId?.toString();
+    if (!prId) continue;
+
+    if (!groupMap.has(prId)) {
+      groupMap.set(prId, {
+        paymentRecordId: prId,
+        studentName: tx.paymentRecordId?.nameOfChild || "Unknown",
+        className: tx.paymentRecordId?.classId?.name || "N/A",
+        dateOfPayment: tx.paymentRecordId?.dateOfPayment || null,
+        items: [],
+      });
+    }
+
+    groupMap.get(prId).items.push({
+      transactionId: tx._id,
+      itemName: tx.itemId?.name || "Unknown Item",
+      quantity: tx.quantity,
+      status: tx.status,
+      createdAt: tx.createdAt,
+      handedOverBy: tx.handedOverBy?.fullName || "System",
+      handedOverAt: tx.handedOverAt || null,
+      note: tx.statusHistory?.slice(-1)[0]?.reason || null,
+    });
+  }
+
+  return Array.from(groupMap.values());
+}
 
 // ─── Controllers ──────────────────────────────────────────────────────────────
 
@@ -67,7 +57,6 @@ export const getStaffDashboard = async (req, res, next) => {
     const { authorizedItemIds } = resolveStaffPermissions(req.user);
     const staffId = req.user.id;
 
-    // Build simple filter: items the user is authorized for OR explicitly assigned to them
     const pendingFilter = {
       status: "pending",
       $or: [
@@ -76,7 +65,6 @@ export const getStaffDashboard = async (req, res, next) => {
       ],
     };
 
-    // If no authorized items and no explicit assignments, return empty
     if (authorizedItemIds.length === 0) {
       pendingFilter.$or = [{ staffIds: { $in: [new mongoose.Types.ObjectId(staffId)] } }];
     }
@@ -98,16 +86,18 @@ export const getStaffDashboard = async (req, res, next) => {
       }),
     ]);
 
-    const priorityActions = await ItemTransaction.find(pendingFilter)
+    const priorityTxs = await ItemTransaction.find(pendingFilter)
       .populate({
         path: "paymentRecordId",
-        select: "nameOfChild classId",
+        select: "nameOfChild classId dateOfPayment",
         populate: { path: "classId", select: "name" },
       })
       .populate("itemId", "name")
       .sort({ createdAt: 1 })
-      .limit(5)
+      .limit(25)
       .lean();
+
+    const grouped = groupTransactions(priorityTxs).slice(0, 5);
 
     return res.status(200).json({
       success: true,
@@ -115,7 +105,7 @@ export const getStaffDashboard = async (req, res, next) => {
       data: {
         welcome: { name: req.user.fullName?.split(" ")[0] || "Staff", date: new Date().toISOString().split("T")[0] },
         stats: { pending: pendingCount, collectedToday: collectedTodayCount },
-        priorityActions: priorityActions.map(transformPriorityAction),
+        priorityActions: grouped,
       },
     });
   } catch (error) {
@@ -129,12 +119,10 @@ export const getStaffAssignments = async (req, res, next) => {
     const { page = 1, limit = 20, classId } = req.query;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
 
     const { authorizedItemIds } = resolveStaffPermissions(req.user);
     const staffId = req.user.id;
 
-    // Build simple filter: items the user is authorized for OR explicitly assigned to them
     let baseFilter = {
       status: "pending",
       $or: [
@@ -143,40 +131,37 @@ export const getStaffAssignments = async (req, res, next) => {
       ],
     };
 
-    // If no authorized items, only show explicitly assigned
     if (authorizedItemIds.length === 0) {
       baseFilter.$or = [{ staffIds: { $in: [new mongoose.Types.ObjectId(staffId)] } }];
     }
 
-    // Optional class filter (only if explicitly requested by frontend)
     if (classId) {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id);
       baseFilter.paymentRecordId = { $in: classPRIds };
     }
 
-    const [transactions, total] = await Promise.all([
-      ItemTransaction.find(baseFilter)
-        .populate({
-          path: "paymentRecordId",
-          select: "nameOfChild classId dateOfPayment",
-          populate: { path: "classId", select: "name" },
-        })
-        .populate("itemId", "name")
-        .sort({ createdAt: 1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      ItemTransaction.countDocuments(baseFilter),
-    ]);
+    const allTransactions = await ItemTransaction.find(baseFilter)
+      .populate({
+        path: "paymentRecordId",
+        select: "nameOfChild classId dateOfPayment",
+        populate: { path: "classId", select: "name" },
+      })
+      .populate("itemId", "name")
+      .sort({ createdAt: 1 })
+      .lean();
 
+    const allGroups = groupTransactions(allTransactions);
+    const total = allGroups.length;
     const pages = Math.ceil(total / limitNum);
+    const skip = (pageNum - 1) * limitNum;
+    const paginatedGroups = allGroups.slice(skip, skip + limitNum);
 
     return res.status(200).json({
       success: true,
       message: "Assignments fetched successfully",
       data: {
-        transactions: transactions.map(transformAssignment),
+        groups: paginatedGroups,
         total,
         page: pageNum,
         pages,
@@ -216,7 +201,6 @@ export const markCollected = async (req, res, next) => {
       return next(err);
     }
 
-    // Authorization check: either item is in user's authorized list OR explicitly assigned to them
     const isAuthorized =
       authorizedItemIds.includes(transaction.itemId._id.toString()) || transaction.staffIds?.some((sid) => sid.toString() === staffId);
 
@@ -258,12 +242,10 @@ export const getStaffHistory = async (req, res, next) => {
     const { page = 1, limit = 20, startDate, endDate, classId, search } = req.query;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
 
     const { authorizedItemIds } = resolveStaffPermissions(req.user);
     const staffId = req.user.id;
 
-    // Base filter for collected items
     let baseFilter = {
       status: "collected",
       $or: [
@@ -276,7 +258,6 @@ export const getStaffHistory = async (req, res, next) => {
       baseFilter.$or = [{ staffIds: { $in: [new mongoose.Types.ObjectId(staffId)] } }];
     }
 
-    // Apply optional filters
     if (startDate || endDate) {
       const dateFilter = {};
       if (startDate) dateFilter.$gte = new Date(startDate);
@@ -294,7 +275,6 @@ export const getStaffHistory = async (req, res, next) => {
       baseFilter.paymentRecordId = { $in: classPRIds };
     }
 
-    // Search filter
     if (search && search.trim()) {
       const q = search.trim();
       const [matchingPRs, matchingItems, matchingStaff] = await Promise.all([
@@ -313,29 +293,28 @@ export const getStaffHistory = async (req, res, next) => {
       }
     }
 
-    const [transactions, total] = await Promise.all([
-      ItemTransaction.find(baseFilter)
-        .populate({
-          path: "paymentRecordId",
-          select: "nameOfChild classId",
-          populate: { path: "classId", select: "name" },
-        })
-        .populate("itemId", "name")
-        .populate("handedOverBy", "fullName")
-        .sort({ handedOverAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      ItemTransaction.countDocuments(baseFilter),
-    ]);
+    const allTransactions = await ItemTransaction.find(baseFilter)
+      .populate({
+        path: "paymentRecordId",
+        select: "nameOfChild classId dateOfPayment",
+        populate: { path: "classId", select: "name" },
+      })
+      .populate("itemId", "name")
+      .populate("handedOverBy", "fullName")
+      .sort({ handedOverAt: -1 })
+      .lean();
 
+    const allGroups = groupTransactions(allTransactions);
+    const total = allGroups.length;
     const pages = Math.ceil(total / limitNum);
+    const skip = (pageNum - 1) * limitNum;
+    const paginatedGroups = allGroups.slice(skip, skip + limitNum);
 
     return res.status(200).json({
       success: true,
       message: "History fetched successfully",
       data: {
-        transactions: transactions.map(transformHistoryItem),
+        groups: paginatedGroups,
         total,
         page: pageNum,
         pages,
@@ -349,7 +328,6 @@ export const getStaffHistory = async (req, res, next) => {
 
 export const getStaffClasses = async (req, res, next) => {
   try {
-    // Simplified: just return classes from items the user is authorized for
     const { authorizedItemIds } = resolveStaffPermissions(req.user);
 
     if (authorizedItemIds.length === 0) {
@@ -360,7 +338,6 @@ export const getStaffClasses = async (req, res, next) => {
       });
     }
 
-    // Get classes from items the user is authorized for
     const items = await Item.find({ _id: { $in: authorizedItemIds } })
       .select("classIds")
       .lean();
