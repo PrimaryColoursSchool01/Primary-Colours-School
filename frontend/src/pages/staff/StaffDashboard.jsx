@@ -120,6 +120,70 @@ const styles = `
   }
 `;
 
+/* ─── Priority Action Group Card ─────────────────────────────────────────── */
+function PriorityGroupCard({ group, onCollect, onCollectAll }) {
+  const VISIBLE_LIMIT = 3;
+  const [showAll, setShowAll] = useState(false);
+  const visibleItems = showAll ? group.items : group.items.slice(0, VISIBLE_LIMIT);
+  const hiddenCount = group.items.length - VISIBLE_LIMIT;
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 overflow-hidden">
+      <div className="flex items-center gap-3 px-3.5 py-3">
+        <div className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `hsl(${(group.studentName.charCodeAt(0) * 37) % 360}, 55%, 52%)` }}>
+          {group.studentName.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-900 text-sm truncate">{group.studentName}</p>
+          <p className="text-xs text-slate-400">{group.className}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white" style={{ background: "#136dec" }}>
+            {group.items.length}
+          </span>
+          {group.items.length > 1 && (
+            <button
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-[#136dec] hover:text-white hover:border-[#136dec] transition-all"
+              onClick={() => onCollectAll(group)}
+            >
+              All
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="border-t border-slate-100 divide-y divide-slate-50">
+        {visibleItems.map((item) => (
+          <div key={item.transactionId} className="flex items-center justify-between px-3.5 py-2.5 pl-[52px]">
+            <div className="flex items-center gap-2 min-w-0">
+              <Package className="h-3.5 w-3.5 text-[#136dec] flex-shrink-0" />
+              <span className="text-xs font-medium text-slate-700 truncate">{item.itemName}</span>
+              <span className="flex-shrink-0 text-xs font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                {item.quantity} {item.quantity === 1 ? "unit" : "units"}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              className="flex-shrink-0 h-7 rounded-lg px-2.5 text-xs font-semibold text-white ml-2"
+              style={{ background: "#136dec" }}
+              onClick={() => onCollect({ transactionId: item.transactionId, studentName: group.studentName, className: group.className, itemName: item.itemName, quantity: item.quantity })}
+            >
+              Hand Over
+            </Button>
+          </div>
+        ))}
+        {group.items.length > VISIBLE_LIMIT && (
+          <button
+            className="w-full flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#136dec] hover:bg-blue-50 transition-colors"
+            onClick={() => setShowAll((v) => !v)}
+          >
+            {showAll ? <>▲ Show less</> : <>▾ Show {hiddenCount} more item{hiddenCount !== 1 ? "s" : ""}</>}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Enhanced Skeleton Loader with Meaningful Message & Motion ──────────── */
 function DashboardSkeleton() {
   return (
@@ -165,6 +229,9 @@ export default function StaffDashboard() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const [collectingAll, setCollectingAll] = useState(null);
+  const [submittingAll, setSubmittingAll] = useState(false);
+
   useEffect(() => {
     fetchDashboard();
   }, []);
@@ -193,13 +260,30 @@ export default function StaffDashboard() {
     setSubmitting(true);
     try {
       await markCollected(collecting.transactionId, note);
-      toast.success("Item marked as collected successfully");
+      toast.success(`${collecting.itemName} handed over to ${collecting.studentName}`);
       setCollecting(null);
       fetchDashboard();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to mark item as collected");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirmCollectAll = async (note) => {
+    if (!collectingAll || submittingAll) return;
+    setSubmittingAll(true);
+    try {
+      for (const item of collectingAll.items) {
+        await markCollected(item.transactionId, note || "All items handed over together");
+      }
+      toast.success(`All items handed over to ${collectingAll.studentName}`);
+      setCollectingAll(null);
+      fetchDashboard();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to record handover");
+    } finally {
+      setSubmittingAll(false);
     }
   };
 
@@ -376,50 +460,12 @@ export default function StaffDashboard() {
                   <CheckCircle2 className="h-8 w-8 text-emerald-400" />
                 </div>
                 <p className="display-font text-base font-bold text-slate-800">All caught up!</p>
-                <p className="mt-1 text-sm text-slate-400 max-w-xs">No pending items to distribute right now. Check back later.</p>
+                <p className="mt-1 text-sm text-slate-400 max-w-xs">No items waiting to be handed over right now.</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {priorityActions.map((item, idx) => (
-                  <div
-                    key={item.transactionId}
-                    className="action-row flex flex-row items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 sm:p-4"
-                    style={{ animationDelay: `${idx * 60}ms` }}
-                  >
-                    {/* Avatar */}
-                    <div
-                      className="flex-shrink-0 flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                      style={{
-                        background: `hsl(${(item.studentName.charCodeAt(0) * 37) % 360}, 55%, 52%)`,
-                      }}
-                    >
-                      {item.studentName.charAt(0).toUpperCase()}
-                    </div>
-
-                    {/* Details — takes all remaining space */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900 text-sm sm:text-base leading-snug truncate">{item.studentName}</p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <span className="text-xs text-slate-500 font-medium">{item.className}</span>
-                        <span className="text-slate-300 text-xs">•</span>
-                        <span className="text-xs text-[#136dec] font-semibold">{item.itemName}</span>
-                        <span className="text-slate-300 text-xs">×</span>
-                        <span className="text-xs font-bold text-slate-700">{item.quantity}</span>
-                      </div>
-                    </div>
-
-                    {/* Right: action button — never grows, never wraps */}
-                    <Button
-                      size="sm"
-                      className="collect-btn flex-shrink-0 h-9 rounded-lg px-3 sm:px-4 text-xs font-semibold text-white"
-                      style={{ background: "#136dec" }}
-                      onClick={() => handleOpenCollect(item)}
-                    >
-                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 hidden sm:inline-block" />
-                      <span className="hidden sm:inline">Mark Collected</span>
-                      <span className="sm:hidden">Collect</span>
-                    </Button>
-                  </div>
+              <div className="space-y-3">
+                {priorityActions.map((group) => (
+                  <PriorityGroupCard key={group.paymentRecordId} group={group} onCollect={handleOpenCollect} onCollectAll={setCollectingAll} />
                 ))}
               </div>
             )}
@@ -479,8 +525,8 @@ export default function StaffDashboard() {
           >
             {/* Modal header with color bar */}
             <div className="px-6 pt-6 pb-5" style={{ background: "linear-gradient(135deg, #0d4fad, #136dec)" }}>
-              <DialogTitle className="display-font text-xl font-bold text-white">Confirm Collection</DialogTitle>
-              <DialogDescription className="mt-1 text-sm text-blue-100">Verify the details before confirming handover.</DialogDescription>
+              <DialogTitle className="display-font text-xl font-bold text-white">Confirm Handover</DialogTitle>
+              <DialogDescription className="mt-1 text-sm text-blue-100">Check the details below before confirming that this item has been given to the student.</DialogDescription>
             </div>
 
             {collecting && (
@@ -512,9 +558,12 @@ export default function StaffDashboard() {
                       <span className="text-sm font-medium text-slate-700">{collecting.itemName}</span>
                     </div>
                     <span className="rounded-lg px-3 py-1 text-xs font-bold text-[#136dec]" style={{ background: "rgba(19,109,236,0.08)" }}>
-                      Qty: {collecting.quantity}
+                      {collecting.quantity} {collecting.quantity === 1 ? "unit" : "units"}
                     </span>
                   </div>
+                  <p className="text-xs text-slate-400 pl-6">
+                    You are handing over <strong className="text-slate-700">{collecting.quantity} {collecting.quantity === 1 ? "unit" : "units"}</strong> of <strong className="text-slate-700">{collecting.itemName}</strong> to this student.
+                  </p>
                 </div>
 
                 {/* Note input */}
@@ -553,16 +602,77 @@ export default function StaffDashboard() {
                     disabled={submitting}
                   >
                     {submitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing…
-                      </>
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
                     ) : (
-                      <>
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Confirm
-                      </>
+                      <><CheckCircle2 className="mr-2 h-4 w-4" />Confirm Handover</>
                     )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Hand Over All Modal ───────────────────────────────────── */}
+        <Dialog open={!!collectingAll} onOpenChange={(open) => !open && !submittingAll && setCollectingAll(null)}>
+          <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-md rounded-2xl border-0 p-0 overflow-hidden shadow-2xl" style={{ boxShadow: "0 32px 80px -20px rgba(0,0,0,0.25)" }}>
+            <div className="px-6 pt-6 pb-5" style={{ background: "linear-gradient(135deg, #0d4fad, #136dec)" }}>
+              <DialogTitle className="display-font text-xl font-bold text-white">Hand Over All Items</DialogTitle>
+              <DialogDescription className="mt-1 text-sm text-blue-100">This will mark all pending items for this student as handed over.</DialogDescription>
+            </div>
+            {collectingAll && (
+              <div className="px-6 py-5 space-y-4 bg-white">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `hsl(${(collectingAll.studentName.charCodeAt(0) * 37) % 360}, 55%, 52%)` }}>
+                    {collectingAll.studentName.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900 text-sm">{collectingAll.studentName}</p>
+                    <p className="text-xs text-slate-400">{collectingAll.className}</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Items being handed over</p>
+                  <div className="rounded-xl border border-slate-100 divide-y divide-slate-50 overflow-hidden">
+                    {collectingAll.items.map((item) => (
+                      <div key={item.transactionId} className="flex items-center justify-between px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <Package className="h-3.5 w-3.5 text-[#136dec]" />
+                          <span className="text-sm text-slate-700">{item.itemName}</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                          {item.quantity} {item.quantity === 1 ? "unit" : "units"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Note <span className="text-xs font-normal text-slate-400">(Optional)</span></label>
+                  <Input
+                    id="handover-all-note"
+                    placeholder="e.g. Student collected all items in person…"
+                    onChange={(e) => e.target.noteValue = e.target.value}
+                    disabled={submittingAll}
+                    className="h-11 rounded-xl border-slate-200 bg-white text-sm"
+                  />
+                </div>
+                <div className="flex gap-2.5 pt-1">
+                  <DialogClose asChild>
+                    <Button variant="outline" disabled={submittingAll} className="flex-1 h-11 rounded-xl border-slate-200 font-semibold">Cancel</Button>
+                  </DialogClose>
+                  <Button
+                    className="flex-1 h-11 rounded-xl font-semibold text-white"
+                    style={{ background: submittingAll ? "#7ab0f7" : "linear-gradient(135deg, #136dec, #2f88ff)", boxShadow: submittingAll ? "none" : "0 8px 20px -8px rgba(19,109,236,0.6)" }}
+                    onClick={() => {
+                      const noteInput = document.getElementById("handover-all-note");
+                      handleConfirmCollectAll(noteInput?.value || "");
+                    }}
+                    disabled={submittingAll}
+                  >
+                    {submittingAll
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
+                      : <><CheckCircle2 className="mr-2 h-4 w-4" />Hand Over All</>}
                   </Button>
                 </div>
               </div>
