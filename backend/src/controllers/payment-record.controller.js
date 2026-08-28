@@ -276,12 +276,34 @@ export const getPaymentRecordById = async (req, res, next) => {
 
 export const updatePaymentRecordById = async (req, res, next) => {
   const { id } = req.params;
-  const { action, acceptedItemIds, rejectionReason } = req.body;
+  const { action, acceptedItemIds, rejectionReason, amountReceived } = req.body;
 
-  if (!id || !action || !["accept", "reject"].includes(action)) {
+  if (!id || !action || !["accept", "reject", "update-amount"].includes(action)) {
     const err = new Error("Invalid request parameters");
     err.statusCode = 400;
     return next(err);
+  }
+
+  // amountReceived is required for accept only when not provided as undefined
+  if (action !== "reject" && action !== "update-amount") {
+    if (amountReceived !== undefined && amountReceived !== null && amountReceived !== "") {
+      if (isNaN(Number(amountReceived)) || Number(amountReceived) < 0) {
+        const err = new Error("Amount received must be a valid positive number");
+        err.statusCode = 400;
+        return next(err);
+      }
+    }
+  } else if (action === "update-amount") {
+    if (amountReceived === undefined || amountReceived === null || amountReceived === "") {
+      const err = new Error("Amount received is required");
+      err.statusCode = 400;
+      return next(err);
+    }
+    if (isNaN(Number(amountReceived)) || Number(amountReceived) < 0) {
+      const err = new Error("Amount received must be a valid positive number");
+      err.statusCode = 400;
+      return next(err);
+    }
   }
 
   if (action === "accept" && (!acceptedItemIds || !Array.isArray(acceptedItemIds) || acceptedItemIds.length === 0)) {
@@ -304,6 +326,21 @@ export const updatePaymentRecordById = async (req, res, next) => {
       return next(err);
     }
 
+    // ── UPDATE AMOUNT ONLY (no item status changes) ───────────────────
+    if (action === "update-amount") {
+      paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
+      await paymentRecord.save();
+
+      const populatedRecord = await PaymentRecord.findById(paymentRecord._id)
+        .populate("classId", "name")
+        .populate("items.itemId", "name");
+
+      return res.status(200).json({
+        message: "Payment amount updated",
+        paymentRecord: populatedRecord,
+      });
+    }
+
     // ── REJECT ALL PENDING ITEMS ─────────────────────────────────────
     if (action === "reject") {
       let hasPendingItems = false;
@@ -324,6 +361,7 @@ export const updatePaymentRecordById = async (req, res, next) => {
       paymentRecord.rejectionReason = rejectionReason;
       paymentRecord.rejectedAt = new Date();
       paymentRecord.rejectedBy = req.user.id;
+      paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
       // Middleware will auto-calculate parent status based on final item states
 
       await paymentRecord.save();
@@ -353,6 +391,10 @@ export const updatePaymentRecordById = async (req, res, next) => {
     // Do NOT manually set paymentRecord.status — middleware auto-calculates it
     paymentRecord.acceptedAt = new Date();
     paymentRecord.acceptedBy = req.user.id;
+    // Only accumulate amountReceived if it was provided (debt not yet cleared)
+    if (amountReceived !== undefined && amountReceived !== null && amountReceived !== "") {
+      paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
+    }
 
     await paymentRecord.save();
 

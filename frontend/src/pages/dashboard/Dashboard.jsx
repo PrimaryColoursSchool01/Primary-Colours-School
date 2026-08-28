@@ -476,7 +476,6 @@ export default function Dashboard() {
 
       setDashboardData(dashboard.data);
       setRecentResponses(recent.data?.recentResponses || []);
-      toast.success("Dashboard loaded successfully");
     } catch (err) {
       console.error("Failed to load dashboard:", err);
       setError(err.message || "Failed to connect to server. Please check your connection.");
