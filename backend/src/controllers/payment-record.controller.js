@@ -328,7 +328,19 @@ export const updatePaymentRecordById = async (req, res, next) => {
 
     // ── UPDATE AMOUNT ONLY (no item status changes) ───────────────────
     if (action === "update-amount") {
-      paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
+      const currentReceived = paymentRecord.amountReceived || 0;
+      const newTotal = currentReceived + Number(amountReceived);
+
+      if (newTotal > paymentRecord.totalAmount) {
+        const remaining = paymentRecord.totalAmount - currentReceived;
+        const err = new Error(
+          `Amount entered would exceed the total payment. Already received: ₦${currentReceived.toLocaleString()}. Maximum you can enter now: ₦${remaining.toLocaleString()}.`
+        );
+        err.statusCode = 400;
+        return next(err);
+      }
+
+      paymentRecord.amountReceived = newTotal;
       await paymentRecord.save();
 
       const populatedRecord = await PaymentRecord.findById(paymentRecord._id)
@@ -393,7 +405,19 @@ export const updatePaymentRecordById = async (req, res, next) => {
     paymentRecord.acceptedBy = req.user.id;
     // Only accumulate amountReceived if it was provided (debt not yet cleared)
     if (amountReceived !== undefined && amountReceived !== null && amountReceived !== "") {
-      paymentRecord.amountReceived = (paymentRecord.amountReceived || 0) + Number(amountReceived);
+      const currentReceived = paymentRecord.amountReceived || 0;
+      const newTotal = currentReceived + Number(amountReceived);
+
+      if (newTotal > paymentRecord.totalAmount) {
+        const remaining = paymentRecord.totalAmount - currentReceived;
+        const err = new Error(
+          `Amount entered would exceed the total payment. Already received: ₦${currentReceived.toLocaleString()}. Maximum you can enter now: ₦${remaining.toLocaleString()}.`
+        );
+        err.statusCode = 400;
+        return next(err);
+      }
+
+      paymentRecord.amountReceived = newTotal;
     }
 
     await paymentRecord.save();

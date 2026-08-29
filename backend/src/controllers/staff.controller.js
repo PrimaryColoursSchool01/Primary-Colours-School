@@ -222,6 +222,13 @@ export const markCollected = async (req, res, next) => {
 
     await transaction.save();
 
+    // ── Decrement stock if item has inventory tracking enabled ────────────
+    if (transaction.itemId.stockQuantity !== null && transaction.itemId.stockQuantity !== undefined) {
+      await Item.findByIdAndUpdate(transaction.itemId._id, {
+        $inc: { stockQuantity: -transaction.quantity },
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Item marked as collected successfully",

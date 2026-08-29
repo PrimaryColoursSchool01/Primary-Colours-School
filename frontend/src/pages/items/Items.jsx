@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X, Info, Loader2 } from "lucide-react";
+import { Plus, Download, MoreVertical, ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, X, Info, Loader2, Package, PackagePlus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getAllItems, createItem, updateItem, deleteItem } from "@/services/itemfees.service";
+import { getAllItems, createItem, updateItem, deleteItem, restockItem, setItemStock } from "@/services/itemfees.service";
 import AddItemModal from "./AddItemModal";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -87,6 +87,144 @@ function CompulsoryBadge({ value }) {
     <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
       Optional
     </span>
+  );
+}
+
+// ─── Stock Badge ──────────────────────────────────────────────────────────────
+
+function StockBadge({ stockQuantity }) {
+  if (stockQuantity === null || stockQuantity === undefined) {
+    return <span className="text-xs text-slate-400 font-medium">Not tracked</span>;
+  }
+  if (stockQuantity <= 0) {
+    return <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600">
+      <Package size={11} /> {stockQuantity}
+    </span>;
+  }
+  if (stockQuantity <= 9) {
+    return <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
+      <Package size={11} /> {stockQuantity}
+    </span>;
+  }
+  return <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600">
+    <Package size={11} /> {stockQuantity}
+  </span>;
+}
+
+// ─── Set / Edit Stock Modal ───────────────────────────────────────────────────
+
+function SetStockModal({ open, onOpenChange, item, onConfirm, isSaving }) {
+  const [value, setValue] = useState("");
+  const isEdit = item?.stockQuantity !== null && item?.stockQuantity !== undefined;
+
+  useEffect(() => {
+    if (open) setValue(isEdit ? String(item.stockQuantity) : "");
+  }, [open, item, isEdit]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[380px]">
+        <DialogHeader className="pb-4 border-b border-slate-200">
+          <DialogTitle className="text-base font-bold text-slate-900">
+            {isEdit ? "Edit Stock" : "Set Initial Stock"}
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500 mt-1">
+            {isEdit
+              ? `Correct the current stock level for "${item?.name}".`
+              : `Enter the current stock on hand for "${item?.name}".`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700">
+              {isEdit ? "Correct stock quantity" : "Current stock on hand"}
+            </label>
+            <input
+              type="number"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="e.g. 50"
+              className="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#136dec]/20 focus:border-[#136dec]"
+            />
+            {isEdit && (
+              <p className="text-[11px] text-amber-600">
+                ⚠ This directly sets the stock number. Use "Restock" to add incoming units.
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving} className="text-slate-600">Cancel</Button>
+          <Button
+            onClick={() => onConfirm(Number(value))}
+            disabled={isSaving || value === ""}
+            className="bg-[#136dec] hover:bg-[#0f55c0] text-white"
+          >
+            {isSaving ? "Saving..." : isEdit ? "Update Stock" : "Set Stock"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Restock Modal ────────────────────────────────────────────────────────────
+
+function RestockModal({ open, onOpenChange, item, onConfirm, isSaving }) {
+  const [value, setValue] = useState("");
+  const addQty = parseInt(value) || 0;
+  const currentStock = item?.stockQuantity ?? 0;
+  const newStock = currentStock + addQty;
+
+  useEffect(() => { if (open) setValue(""); }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[380px]">
+        <DialogHeader className="pb-4 border-b border-slate-200">
+          <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <PackagePlus size={16} className="text-[#136dec]" />
+            Restock Item
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500 mt-1">
+            Add new units to the current stock for "{item?.name}".
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-3">
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+            <span className="text-xs text-slate-500">Current stock</span>
+            <span className="text-sm font-bold text-slate-800">{currentStock} units</span>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700">How many units are you adding?</label>
+            <input
+              type="number"
+              min="1"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="e.g. 20"
+              className="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#136dec]/20 focus:border-[#136dec]"
+            />
+          </div>
+          {addQty > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+              <span className="text-xs text-green-700 font-medium">Stock after restock</span>
+              <span className="text-sm font-bold text-green-700">{newStock} units</span>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving} className="text-slate-600">Cancel</Button>
+          <Button
+            onClick={() => onConfirm(addQty)}
+            disabled={isSaving || addQty <= 0}
+            className="bg-[#136dec] hover:bg-[#0f55c0] text-white"
+          >
+            {isSaving ? "Restocking..." : `Add ${addQty > 0 ? addQty + " units" : "units"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -265,6 +403,12 @@ export default function Items() {
   const [showWorkflowReminder, setShowWorkflowReminder] = useState(true);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
+  // ─── Inventory Modal State ─────────────────────────────────────────────────
+  const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [restockModalOpen, setRestockModalOpen] = useState(false);
+  const [inventoryItem, setInventoryItem] = useState(null);
+  const [isSavingStock, setIsSavingStock] = useState(false);
+
   // For reading ?id= parameter from Configuration page
   const [searchParams] = useSearchParams();
 
@@ -361,6 +505,40 @@ export default function Items() {
   const openEditModal = (item) => {
     setEditingItem(item);
     setModalOpen(true);
+  };
+
+  // ─── Inventory Handlers ────────────────────────────────────────────────────
+
+  const handleSetStock = async (stockQuantity) => {
+    if (!inventoryItem) return;
+    setIsSavingStock(true);
+    try {
+      await setItemStock(inventoryItem._id, stockQuantity);
+      await loadItems();
+      toast.success(`Stock set to ${stockQuantity} for ${inventoryItem.name}`);
+      setStockModalOpen(false);
+      setInventoryItem(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update stock");
+    } finally {
+      setIsSavingStock(false);
+    }
+  };
+
+  const handleRestock = async (quantity) => {
+    if (!inventoryItem) return;
+    setIsSavingStock(true);
+    try {
+      const res = await restockItem(inventoryItem._id, quantity);
+      await loadItems();
+      toast.success(res.message || `Restocked ${inventoryItem.name}`);
+      setRestockModalOpen(false);
+      setInventoryItem(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to restock item");
+    } finally {
+      setIsSavingStock(false);
+    }
   };
 
   // ─── PDF Export ────────────────────────────────────────────────────────────
@@ -624,6 +802,7 @@ export default function Items() {
                     <div className="flex items-center gap-2 mb-2">
                       <ScopeBadge scope={item.scope} />
                       <CompulsoryBadge value={item.compulsory} />
+                      <StockBadge stockQuantity={item.stockQuantity} />
                     </div>
                     <p className="text-[10px] text-slate-500 mb-2.5">
                       {item.sectionName} · {classCountText}
@@ -640,6 +819,20 @@ export default function Items() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEditModal(item)}>Edit</DropdownMenuItem>
+                          {item.stockQuantity === null || item.stockQuantity === undefined ? (
+                            <DropdownMenuItem onClick={() => { setInventoryItem(item); setStockModalOpen(true); }}>
+                              Set Stock
+                            </DropdownMenuItem>
+                          ) : (
+                            <>
+                              <DropdownMenuItem onClick={() => { setInventoryItem(item); setStockModalOpen(true); }}>
+                                Edit Stock
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setInventoryItem(item); setRestockModalOpen(true); }}>
+                                Restock
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuItem className="text-rose-600" onClick={() => confirmDelete(item)}>
                             Delete
                           </DropdownMenuItem>
@@ -666,6 +859,7 @@ export default function Items() {
                     Classes
                   </th>
                   <th className="px-4 lg:px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Price (₦)</th>
+                  <th className="px-4 lg:px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Stock</th>
                   <th className="px-4 lg:px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Type</th>
                   <th className="px-4 lg:px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -701,6 +895,9 @@ export default function Items() {
                           <span className="text-sm font-bold text-slate-900">₦{item.price.toLocaleString()}</span>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5 text-center">
+                          <StockBadge stockQuantity={item.stockQuantity} />
+                        </td>
+                        <td className="px-4 lg:px-5 py-3.5 text-center">
                           <CompulsoryBadge value={item.compulsory} />
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
@@ -712,6 +909,20 @@ export default function Items() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEditModal(item)}>Edit</DropdownMenuItem>
+                              {item.stockQuantity === null || item.stockQuantity === undefined ? (
+                                <DropdownMenuItem onClick={() => { setInventoryItem(item); setStockModalOpen(true); }}>
+                                  Set Stock
+                                </DropdownMenuItem>
+                              ) : (
+                                <>
+                                  <DropdownMenuItem onClick={() => { setInventoryItem(item); setStockModalOpen(true); }}>
+                                    Edit Stock
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setInventoryItem(item); setRestockModalOpen(true); }}>
+                                    Restock
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                               <DropdownMenuItem className="text-rose-600" onClick={() => confirmDelete(item)}>
                                 Delete
                               </DropdownMenuItem>
@@ -810,6 +1021,24 @@ export default function Items() {
         itemName={itemToDelete?.name}
         onConfirm={handleDeleteItem}
         isDeleting={isDeleting}
+      />
+
+      {/* ── Set / Edit Stock Modal ──────────────────────────────────────────── */}
+      <SetStockModal
+        open={stockModalOpen}
+        onOpenChange={(v) => { setStockModalOpen(v); if (!v) setInventoryItem(null); }}
+        item={inventoryItem}
+        onConfirm={handleSetStock}
+        isSaving={isSavingStock}
+      />
+
+      {/* ── Restock Modal ───────────────────────────────────────────────────── */}
+      <RestockModal
+        open={restockModalOpen}
+        onOpenChange={(v) => { setRestockModalOpen(v); if (!v) setInventoryItem(null); }}
+        item={inventoryItem}
+        onConfirm={handleRestock}
+        isSaving={isSavingStock}
       />
     </>
   );

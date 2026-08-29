@@ -34,6 +34,10 @@ const itemsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    stockQuantity: {
+      type: Number,
+      default: null,
+    },
   },
   { timestamps: true },
 );
