@@ -19,6 +19,7 @@ function transformItemForFrontend(item) {
     sectionName: item.sectionId?.name || "All Sections",
     classIds: item.classIds?.map((c) => c._id) || [],
     classNames: item.classIds?.map((c) => c.name) || [],
+    stockQuantity: item.stockQuantity ?? null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -143,7 +144,7 @@ export const getItemById = async (req, res, next) => {
 
 export const updateItemById = async (req, res, next) => {
   const { id } = req.params;
-  const { name, price, compulsory, scope, sectionId, classIds } = req.body;
+  const { name, price, compulsory, scope, sectionId, classIds, stockQuantity } = req.body;
 
   try {
     const currentItem = await Item.findById(id);
@@ -182,6 +183,19 @@ export const updateItemById = async (req, res, next) => {
         return next(err);
       }
       updateData.compulsory = compulsory;
+    }
+
+    // ── Stock Quantity ─────────────────────────────────────────────────────
+    if (stockQuantity !== undefined) {
+      if (stockQuantity === null) {
+        updateData.stockQuantity = null; // Allow un-tracking
+      } else if (isNaN(Number(stockQuantity))) {
+        const err = new Error("Stock quantity must be a valid number");
+        err.statusCode = 400;
+        return next(err);
+      } else {
+        updateData.stockQuantity = Number(stockQuantity);
+      }
     }
 
     // ── Scope-Dependent Validation ────────────────────
@@ -253,7 +267,49 @@ export const updateItemById = async (req, res, next) => {
   }
 };
 
-// ─── Delete Item By ID ───────────────────────────────────────────────────────
+// ─── Restock Item ────────────────────────────────────────────────────────────
+
+export const restockItem = async (req, res, next) => {
+  const { id } = req.params;
+  const { quantity } = req.body;
+
+  if (quantity === undefined || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+    const err = new Error("Restock quantity must be a positive number");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  try {
+    const item = await Item.findById(id);
+    if (!item) {
+      const err = new Error("Item not found");
+      err.statusCode = 404;
+      return next(err);
+    }
+
+    if (item.stockQuantity === null || item.stockQuantity === undefined) {
+      const err = new Error("Cannot restock an item that has no stock tracking enabled. Set initial stock first.");
+      err.statusCode = 400;
+      return next(err);
+    }
+
+    const previousStock = item.stockQuantity;
+    const addedQty = Number(quantity);
+    item.stockQuantity = previousStock + addedQty;
+    await item.save();
+
+    const populatedItem = await Item.findById(id).populate("sectionId", "name").populate("classIds", "name");
+
+    return res.status(200).json({
+      success: true,
+      message: `Stock updated: ${previousStock} + ${addedQty} = ${item.stockQuantity}`,
+      data: transformItemForFrontend(populatedItem),
+    });
+  } catch (error) {
+    console.error("Error restocking item:", error);
+    next(error);
+  }
+};
 
 export const deleteItemById = async (req, res, next) => {
   const { id } = req.params;

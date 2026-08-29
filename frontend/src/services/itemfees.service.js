@@ -25,6 +25,16 @@ export const deleteItem = async (id) => {
   return data;
 };
 
+export const restockItem = async (id, quantity) => {
+  const { data } = await api.post(`/item/${id}/restock`, { quantity });
+  return data;
+};
+
+export const setItemStock = async (id, stockQuantity) => {
+  const { data } = await api.put(`/item/${id}`, { stockQuantity });
+  return data;
+};
+
 export const getSections = async () => {
   const { data } = await api.get("/sections");
   return data;
