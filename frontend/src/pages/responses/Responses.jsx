@@ -216,6 +216,7 @@ export default function Responses() {
   const newTotalReceived = previouslyReceived + amountReceivedNum;
   const newOutstanding = Math.max(0, (selectedRecord?.totalAmount || 0) - newTotalReceived);
   const showPreview = amountReceivedNum > 0;
+  const isOverpayment = newTotalReceived > (selectedRecord?.totalAmount || 0);
   const debtCleared = previouslyReceived >= (selectedRecord?.totalAmount || 0);
 
   // ── Format number with commas for display ─────────────────────────────
@@ -1450,22 +1451,33 @@ export default function Responses() {
                     </div>
                     {/* Live preview */}
                     {showPreview && (
-                      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 space-y-1">
-                        <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">What this means</p>
+                      <div className={`rounded-lg border px-3 py-2 space-y-1 ${newTotalReceived > (selectedRecord?.totalAmount || 0) ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-100"}`}>
+                        <p className={`text-[10px] font-semibold uppercase tracking-wide ${newTotalReceived > (selectedRecord?.totalAmount || 0) ? "text-red-700" : "text-blue-700"}`}>
+                          {newTotalReceived > (selectedRecord?.totalAmount || 0) ? "⚠ Amount too high — reduce the amount" : "What this means"}
+                        </p>
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-600">Paid now</span>
                           <span className="font-medium text-slate-800">₦{amountReceivedNum.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-600">Total received from this parent</span>
-                          <span className="font-semibold text-green-700">₦{newTotalReceived.toLocaleString()}</span>
+                          <span className={`font-semibold ${newTotalReceived > (selectedRecord?.totalAmount || 0) ? "text-red-600" : "text-green-700"}`}>
+                            ₦{newTotalReceived.toLocaleString()}
+                          </span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-600">Still owed</span>
-                          <span className={`font-semibold ${newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
-                            ₦{newOutstanding.toLocaleString()}
+                          <span className={`font-semibold ${newTotalReceived > (selectedRecord?.totalAmount || 0) ? "text-red-600" : newOutstanding > 0 ? "text-red-600" : "text-green-600"}`}>
+                            {newTotalReceived > (selectedRecord?.totalAmount || 0)
+                              ? `Exceeds total by ₦${(newTotalReceived - (selectedRecord?.totalAmount || 0)).toLocaleString()}`
+                              : `₦${newOutstanding.toLocaleString()}`}
                           </span>
                         </div>
+                        {newTotalReceived > (selectedRecord?.totalAmount || 0) && (
+                          <p className="text-[10px] text-red-600 pt-0.5">
+                            Maximum you can enter: ₦{((selectedRecord?.totalAmount || 0) - previouslyReceived).toLocaleString()}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1497,7 +1509,7 @@ export default function Responses() {
                     <Button
                       variant="outline"
                       onClick={handleUpdateAmount}
-                      disabled={actionLoading}
+                      disabled={actionLoading || isOverpayment}
                       className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 text-xs sm:text-sm h-9"
                     >
                       <span className="truncate">Record Payment Only</span>
@@ -1505,7 +1517,7 @@ export default function Responses() {
                   )}
                   <Button
                     onClick={handleAccept}
-                    disabled={selectedItemIds.length === 0 || actionLoading}
+                    disabled={selectedItemIds.length === 0 || actionLoading || isOverpayment}
                     className={`bg-[#136dec] hover:bg-[#0f55c0] text-white text-xs sm:text-sm h-9 ${debtCleared ? "col-span-2" : ""}`}
                   >
                     {actionLoading
