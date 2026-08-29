@@ -14,9 +14,11 @@ import {
   TrendingUp,
   Percent,
   RefreshCw,
+  Users,
+  Info,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from "recharts";
-import { getPaymentSummary } from "@/services/reports.service";
+import { getPaymentSummary, getStudentRegister } from "@/services/reports.service";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -63,6 +65,8 @@ export default function Reports() {
   const [classes, setClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [registerData, setRegisterData] = useState(null);
+  const [registerLoading, setRegisterLoading] = useState(false);
 
   // Fetch classes from API
   useEffect(() => {
@@ -90,6 +94,7 @@ export default function Reports() {
     }
     setLoading(true);
     setError(null);
+    setRegisterData(null);
     try {
       const params = {
         startDate: filters.startDate,
@@ -98,8 +103,19 @@ export default function Reports() {
       if (filters.classId && filters.classId !== "all") params.classId = filters.classId;
       if (filters.status && filters.status !== "all") params.status = filters.status;
 
-      const res = await getPaymentSummary(params);
-      setData(res.data);
+      // Always fetch overview report
+      const summaryPromise = getPaymentSummary(params);
+
+      // Only fetch student register when a specific class is selected
+      const registerPromise = filters.classId && filters.classId !== "all"
+        ? getStudentRegister(params)
+        : Promise.resolve(null);
+
+      const [summaryRes, registerRes] = await Promise.all([summaryPromise, registerPromise]);
+
+      setData(summaryRes.data);
+      if (registerRes) setRegisterData(registerRes.data);
+
       toast.success("Report generated successfully");
     } catch (err) {
       setError(err.message || "Failed to fetch report");
@@ -357,6 +373,122 @@ export default function Reports() {
       setExportingPdf(false);
     }
   }, [data, filters]);
+
+  // ── Student Register PDF Export ────────────────────────────────────────────
+  const handleExportRegisterPDF = useCallback(() => {
+    if (!registerData?.students?.length) return toast.error("No student data to export");
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const contentW = pageW - margin * 2;
+
+    const BLUE = [19, 109, 236];
+    const BLUE_DARK = [12, 85, 180];
+    const BLUE_LIGHT = [235, 244, 255];
+    const SLATE_900 = [15, 23, 42];
+    const SLATE_600 = [71, 85, 105];
+    const SLATE_400 = [148, 163, 184];
+    const SLATE_50 = [248, 250, 252];
+    const WHITE = [255, 255, 255];
+    const GREEN = [22, 163, 74];
+    const AMBER = [217, 119, 6];
+    const RED = [220, 38, 38];
+    const ORANGE = [249, 115, 22];
+
+    // Header
+    doc.setFillColor(...BLUE_DARK);
+    doc.rect(0, 0, pageW, 42, "F");
+    doc.setFontSize(15).setFont("helvetica", "bold").setTextColor(...WHITE);
+    doc.text("Primary Colours School", margin, 15);
+    doc.setFontSize(9).setFont("helvetica", "normal").setTextColor(220, 235, 255);
+    doc.text(`Student Payment Register — ${registerData.className}`, margin, 22);
+    doc.setFontSize(7.5).setTextColor(220, 235, 255);
+    if (filters.startDate && filters.endDate) {
+      doc.text(`Period: ${format(new Date(filters.startDate), "PP")} – ${format(new Date(filters.endDate), "PP")}`, pageW - margin, 15, { align: "right" });
+    }
+    doc.text(`Generated: ${format(new Date(), "PPp")}`, pageW - margin, 21, { align: "right" });
+    doc.setDrawColor(...BLUE_LIGHT).setLineWidth(0.3).line(0, 42, pageW, 42);
+
+    let y = 50;
+
+    // Summary row
+    doc.setFillColor(...SLATE_50);
+    doc.roundedRect(margin, y, contentW, 10, 2, 2, "F");
+    doc.setFontSize(7.5).setFont("helvetica", "normal").setTextColor(...SLATE_600);
+    doc.text(`Total students: ${registerData.total}`, margin + 4, y + 6.5);
+    const totalCollected = registerData.students.reduce((sum, s) => sum + s.amountPaid, 0);
+    const totalOutstanding = registerData.students.reduce((sum, s) => sum + s.outstanding, 0);
+    doc.text(`Total collected: NGN ${totalCollected.toLocaleString()}`, pageW / 2, y + 6.5, { align: "center" });
+    doc.text(`Total outstanding: NGN ${totalOutstanding.toLocaleString()}`, pageW - margin - 4, y + 6.5, { align: "right" });
+    y += 16;
+
+    // Table
+    const getStatusColor = (status) => {
+      switch (status) {
+        case "accepted": return GREEN;
+        case "partially_accepted": return ORANGE;
+        case "pending": return AMBER;
+        case "rejected": return RED;
+        default: return SLATE_600;
+      }
+    };
+
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Student", "Date", "Items Paid For", "Paid", "Owed", "Status"]],
+      body: registerData.students.map((s, idx) => [
+        idx + 1,
+        s.studentName,
+        new Date(s.dateOfPayment).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" }),
+        s.items.map((i) => `${i.itemName} ×${i.quantity}`).join(", "),
+        `NGN ${s.amountPaid.toLocaleString()}`,
+        s.outstanding > 0 ? `NGN ${s.outstanding.toLocaleString()}` : "—",
+        formatStatus(s.status),
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: BLUE, textColor: WHITE, fontSize: 7, fontStyle: "bold", cellPadding: 2.5, lineWidth: 0 },
+      bodyStyles: { fontSize: 6.5, cellPadding: 2, textColor: SLATE_900, lineWidth: 0 },
+      alternateRowStyles: { fillColor: SLATE_50 },
+      columnStyles: {
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 35, fontStyle: "bold" },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 55, overflow: "linebreak" },
+        4: { cellWidth: 22, halign: "right", fontStyle: "bold" },
+        5: { cellWidth: 20, halign: "right" },
+        6: { cellWidth: 18, halign: "center" },
+      },
+      styles: { lineColor: [226, 232, 240], lineWidth: 0.1, overflow: "linebreak" },
+      margin: { left: margin, right: margin },
+      didParseCell: (hookData) => {
+        if (hookData.column.index === 6 && hookData.section === "body") {
+          hookData.cell.styles.textColor = getStatusColor(
+            registerData.students[hookData.row.index]?.status
+          );
+          hookData.cell.styles.fontStyle = "bold";
+        }
+        if (hookData.column.index === 5 && hookData.section === "body") {
+          const val = hookData.cell.raw;
+          if (val && val !== "—") hookData.cell.styles.textColor = RED;
+        }
+      },
+    });
+
+    // Footer
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(...SLATE_400).setLineWidth(0.2).line(margin, pageH - 12, pageW - margin, pageH - 12);
+      doc.setFontSize(6).setFont("helvetica", "normal").setTextColor(...SLATE_400);
+      doc.text("Primary Colours School • Confidential", margin, pageH - 7);
+      doc.text(`Page ${i} of ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
+    }
+
+    doc.save(`StudentRegister_${registerData.className?.replace(/\s/g, "_")}_${filters.startDate}_to_${filters.endDate}.pdf`);
+    toast.success("Student register exported");
+  }, [registerData, filters]);
 
   // Pie chart data
   const paymentModeChartData = useMemo(() => {
@@ -757,6 +889,107 @@ export default function Reports() {
               </p>
             </div>
           </div>
+        )}
+
+        {/* SECTION 4: Student Payment Register */}
+        {data && !loading && (
+          <>
+            {filters.classId === "all" ? (
+              /* Hint when no class selected */
+              <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs sm:text-sm font-semibold text-blue-700">Student Payment List</p>
+                  <p className="text-[10px] sm:text-xs text-blue-600 mt-0.5">
+                    Select a specific class from the filters above and generate the report again to see a list of students who have made payments in that class.
+                  </p>
+                </div>
+              </div>
+            ) : registerData ? (
+              /* Student register table */
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-semibold text-slate-900 flex items-center gap-2">
+                      <Users size={14} className="text-[#136dec]" />
+                      Student Payment Register — {registerData.className}
+                    </h3>
+                    <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">
+                      {registerData.total} student{registerData.total !== 1 ? "s" : ""} found for the selected period
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportRegisterPDF()}
+                    className="h-8 px-3 text-[10px] sm:text-xs border-slate-200 bg-white hover:bg-slate-50 shrink-0"
+                  >
+                    <Download size={12} className="mr-1.5" />
+                    Export Register
+                  </Button>
+                </div>
+
+                {registerData.students.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-sm text-slate-500">No accepted or partial payments found for this class in the selected period.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {registerData.students.map((student, idx) => (
+                      <div key={student._id} className="p-4 hover:bg-slate-50 transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                          {/* Student info */}
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                              style={{ background: `hsl(${(student.studentName.charCodeAt(0) * 37) % 360}, 52%, 50%)` }}>
+                              {student.studentName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm font-semibold text-slate-900 truncate">{student.studentName}</p>
+                              <p className="text-[10px] sm:text-xs text-slate-400">
+                                {new Date(student.dateOfPayment).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}
+                                {" · "}{student.modeOfPayment.replace(/-/g, " ")}
+                              </p>
+                            </div>
+                          </div>
+                          {/* Status + amounts */}
+                          <div className="flex items-center gap-3 shrink-0 pl-11 sm:pl-0">
+                            <div className="text-right">
+                              <p className="text-xs font-semibold text-slate-900">₦{student.amountPaid.toLocaleString()}</p>
+                              {student.outstanding > 0 && (
+                                <p className="text-[10px] text-red-500">₦{student.outstanding.toLocaleString()} owed</p>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              student.status === "accepted" ? "bg-green-100 text-green-700" :
+                              student.status === "partially_accepted" ? "bg-orange-100 text-orange-700" :
+                              student.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                              "bg-red-100 text-red-700"
+                            }`}>
+                              {formatStatus(student.status)}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Items */}
+                        <div className="mt-2 pl-11 flex flex-wrap gap-1.5">
+                          {student.items.map((item, i) => (
+                            <span key={i} className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${
+                              item.status === "accepted" ? "bg-green-50 border-green-200 text-green-700" :
+                              item.status === "rejected" ? "bg-red-50 border-red-200 text-red-500 line-through" :
+                              "bg-slate-50 border-slate-200 text-slate-600"
+                            }`}>
+                              {item.itemName} × {item.quantity}
+                              <span className="font-semibold">₦{(item.quantity * item.amount).toLocaleString()}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </>
         )}
 
         {/* Loading Skeleton */}

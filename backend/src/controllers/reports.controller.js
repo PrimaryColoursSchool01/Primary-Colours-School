@@ -3,6 +3,85 @@ import PaymentRecord from "../models/payment-record.model.js";
 import ItemTransaction from "../models/item-transaction.model.js";
 import Item from "../models/items-fess.model.js";
 
+export const getStudentRegister = async (req, res, next) => {
+  const { classId, startDate, endDate, status } = req.query;
+
+  if (!classId) {
+    const err = new Error("Class ID is required for the student register");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  try {
+    const filter = {
+      classId: new mongoose.Types.ObjectId(classId),
+    };
+
+    if (startDate || endDate) {
+      filter.dateOfPayment = {};
+      if (startDate) filter.dateOfPayment.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        filter.dateOfPayment.$lte = end;
+      }
+    }
+
+    if (status && status !== "all") {
+      filter.status = status;
+    } else {
+      // Register only shows students with accepted or partially accepted payments
+      filter.status = { $in: ["accepted", "partially_accepted"] };
+    }
+
+    const records = await PaymentRecord.find(filter)
+      .populate("classId", "name")
+      .populate("items.itemId", "name")
+      .sort({ dateOfPayment: -1 })
+      .lean();
+
+    const students = records.map((record) => {
+      const amountPaid = record.amountReceived ?? record.items
+        .filter((i) => i.status === "accepted")
+        .reduce((sum, i) => sum + i.quantity * i.amountAtPayment, 0);
+
+      const outstanding = Math.max(0, record.totalAmount - amountPaid);
+
+      return {
+        _id: record._id,
+        studentName: record.nameOfChild,
+        payerName: record.nameOfPayerOrCompany,
+        dateOfPayment: record.dateOfPayment,
+        modeOfPayment: record.modeOfPayment,
+        status: record.status,
+        totalAmount: record.totalAmount,
+        amountReceived: record.amountReceived ?? null,
+        amountPaid,
+        outstanding,
+        items: record.items.map((item) => ({
+          itemName: item.itemId?.name || "Unknown",
+          quantity: item.quantity,
+          amount: item.amountAtPayment,
+          status: item.status,
+        })),
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        students,
+        total: students.length,
+        className: records[0]?.classId?.name || null,
+      },
+    });
+  } catch (error) {
+    console.error("Student Register Error:", error);
+    if (!error.statusCode) error.statusCode = 500;
+    next(error);
+  }
+};
+
 export const getPaymentSummary = async (req, res, next) => {
   const { startDate, endDate, classId, status } = req.query;
 
