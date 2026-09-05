@@ -131,9 +131,12 @@ const LIMIT = 20;
 
 function defaultDates() {
   const today = new Date();
-  const prior = new Date();
-  prior.setDate(today.getDate() - 30);
-  return { end: today.toISOString().split("T")[0], start: prior.toISOString().split("T")[0] };
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(today.getFullYear() - 1);
+  return {
+    start: oneYearAgo.toISOString().split("T")[0],
+    end: today.toISOString().split("T")[0],
+  };
 }
 
 export default function StaffHistory() {
@@ -160,11 +163,8 @@ export default function StaffHistory() {
       setError(null);
       const params = { page: pg, limit: LIMIT };
       if (appliedSearch.trim()) params.search = appliedSearch;
-      const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
-      if (hasCustomDateRange) {
-        if (appliedStart) params.startDate = appliedStart;
-        if (appliedEnd) params.endDate = appliedEnd;
-      }
+      if (appliedStart) params.startDate = appliedStart;
+      if (appliedEnd) params.endDate = appliedEnd;
       const res = await getStaffHistory(params);
       setGroups(res.data.groups || []);
       setTotal(res.data.total || 0);
@@ -324,25 +324,27 @@ export default function StaffHistory() {
                   <div className="divide-y divide-slate-50">
                     {group.items.map((item) => (
                       <div key={item.transactionId} className="px-4 py-3 pl-16">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold flex-shrink-0" style={{ background: "rgba(16,185,129,0.08)", color: "#059669" }}>
+                        <div className="flex flex-col gap-1">
+                          {/* Item name + quantity */}
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ background: "rgba(16,185,129,0.08)", color: "#059669" }}>
                               <Package className="h-3 w-3" />{item.itemName}
                             </span>
-                            <span className="rounded-md px-2 py-0.5 text-xs font-bold flex-shrink-0" style={{ background: "#f1f5f9", color: "#475569" }}>×{item.quantity}</span>
+                            <span className="rounded-md px-2 py-0.5 text-xs font-bold" style={{ background: "#f1f5f9", color: "#475569" }}>×{item.quantity}</span>
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                            <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(item.handedOverAt)}</span>
+                          {/* Timestamp + staff + note */}
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                              <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(item.handedOverAt)}</span>
+                            </div>
+                            <span className="flex items-center gap-1 text-xs text-slate-400">
+                              <User className="h-3 w-3" />{item.handedOverBy}
+                            </span>
+                            {item.note && item.note !== "Marked as collected" && item.note !== "All items handed over together" && (
+                              <span className="text-xs italic text-slate-400 truncate max-w-[200px]" title={item.note}>"{item.note}"</span>
+                            )}
                           </div>
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <User className="h-3 w-3" />{item.handedOverBy}
-                          </span>
-                          {item.note && item.note !== "Marked as collected" && (
-                            <span className="text-xs italic text-slate-400 truncate max-w-[200px]" title={item.note}>"{item.note}"</span>
-                          )}
                         </div>
                       </div>
                     ))}
