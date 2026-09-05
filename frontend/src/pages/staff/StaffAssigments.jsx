@@ -169,14 +169,17 @@ function HandoverAllModal({ group, open, onClose, onConfirm, submitting }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !submitting && onClose()}>
-      <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-md rounded-2xl border-0 p-0 overflow-hidden" style={{ boxShadow: "0 32px 80px -20px rgba(0,0,0,0.22)" }}>
-        <div className="px-6 pt-6 pb-5" style={{ background: "linear-gradient(135deg, #0d4fad, #136dec)" }}>
+      <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-md rounded-2xl border-0 p-0 overflow-hidden flex flex-col" style={{ boxShadow: "0 32px 80px -20px rgba(0,0,0,0.22)", maxHeight: "90dvh" }}>
+        {/* Header */}
+        <div className="px-6 pt-6 pb-5 flex-shrink-0" style={{ background: "linear-gradient(135deg, #0d4fad, #136dec)" }}>
           <DialogTitle className="df text-xl font-bold text-white">Hand Over All Items</DialogTitle>
           <DialogDescription className="mt-1 text-sm text-blue-100">
             This will mark all pending items for this student as handed over.
           </DialogDescription>
         </div>
-        <div className="px-6 py-5 space-y-4 bg-white">
+
+        {/* Scrollable content */}
+        <div className="px-6 py-4 space-y-4 bg-white overflow-y-auto flex-1">
           {/* Student info */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(group.studentName) }}>
@@ -188,17 +191,17 @@ function HandoverAllModal({ group, open, onClose, onConfirm, submitting }) {
             </div>
           </div>
 
-          {/* Items summary */}
+          {/* Items list — scrollable independently */}
           <div className="space-y-1">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Items being handed over</p>
-            <div className="rounded-xl border border-slate-100 divide-y divide-slate-50 overflow-hidden">
+            <div className="rounded-xl border border-slate-100 divide-y divide-slate-50 overflow-hidden max-h-[160px] overflow-y-auto">
               {group.items.map((item) => (
                 <div key={item.transactionId} className="flex items-center justify-between px-3 py-2.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Package className="h-3.5 w-3.5 text-[#136dec] flex-shrink-0" />
-                    <span className="text-sm text-slate-700">{item.itemName}</span>
+                    <span className="text-sm text-slate-700 truncate">{item.itemName}</span>
                   </div>
-                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap ml-2">
                     {item.quantity} {item.quantity === 1 ? "unit" : "units"}
                   </span>
                 </div>
@@ -209,6 +212,7 @@ function HandoverAllModal({ group, open, onClose, onConfirm, submitting }) {
             </p>
           </div>
 
+          {/* Note */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-slate-700">
               Note <span className="text-xs font-normal text-slate-400">(Optional — applies to all items)</span>
@@ -221,22 +225,23 @@ function HandoverAllModal({ group, open, onClose, onConfirm, submitting }) {
               className="h-11 rounded-xl border-slate-200 text-sm"
             />
           </div>
+        </div>
 
-          <div className="flex gap-2.5 pt-1">
-            <DialogClose asChild>
-              <Button variant="outline" disabled={submitting} className="flex-1 h-11 rounded-xl border-slate-200 font-semibold">Cancel</Button>
-            </DialogClose>
-            <Button
-              className="flex-1 h-11 rounded-xl font-semibold text-white"
-              style={{ background: submitting ? "#7ab0f7" : "linear-gradient(135deg, #136dec, #2f88ff)", boxShadow: submitting ? "none" : "0 8px 20px -8px rgba(19,109,236,0.5)" }}
-              onClick={() => onConfirm(note)}
-              disabled={submitting}
-            >
-              {submitting
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
-                : <><PackageCheck className="mr-2 h-4 w-4" />Hand Over All</>}
-            </Button>
-          </div>
+        {/* Buttons — always visible, outside scrollable area */}
+        <div className="px-6 py-4 flex gap-2.5 bg-white border-t border-slate-100 flex-shrink-0">
+          <DialogClose asChild>
+            <Button variant="outline" disabled={submitting} className="flex-1 h-11 rounded-xl border-slate-200 font-semibold">Cancel</Button>
+          </DialogClose>
+          <Button
+            className="flex-1 h-11 rounded-xl font-semibold text-white"
+            style={{ background: submitting ? "#7ab0f7" : "linear-gradient(135deg, #136dec, #2f88ff)", boxShadow: submitting ? "none" : "0 8px 20px -8px rgba(19,109,236,0.5)" }}
+            onClick={() => onConfirm(note)}
+            disabled={submitting}
+          >
+            {submitting
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
+              : <><PackageCheck className="mr-2 h-4 w-4" />Hand Over All</>}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -270,6 +275,7 @@ function Pagination({ page, pages, total, limit, onPage }) {
 
 function StudentGroupCard({ group, onCollectOne, onCollectAll }) {
   const [showAll, setShowAll] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const VISIBLE_LIMIT = 3;
   const visibleItems = showAll ? group.items : group.items.slice(0, VISIBLE_LIMIT);
   const hiddenCount = group.items.length - VISIBLE_LIMIT;
@@ -278,84 +284,90 @@ function StudentGroupCard({ group, onCollectOne, onCollectAll }) {
     <div className="group-card rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {/* Card header */}
       <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        {/* Left side — clickable to collapse */}
+        <button
+          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+          onClick={() => setCollapsed((v) => !v)}
+        >
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(group.studentName) }}>
             {group.studentName?.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-slate-900 text-sm truncate">{group.studentName}</p>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
               <span className="text-xs text-slate-400">{group.className}</span>
               {group.dateOfPayment && (
-                <><span className="text-slate-200">•</span>
+                <><span className="text-slate-200 hidden sm:inline">•</span>
                 <span className="flex items-center gap-1 text-xs text-slate-400">
                   <Calendar className="h-3 w-3" />{formatDate(group.dateOfPayment)}
                 </span></>
               )}
             </div>
           </div>
-        </div>
-
+        </button>
         {/* Right side actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white" style={{ background: "#136dec" }}>
             {group.items.length}
           </span>
-          {group.items.length > 1 && (
+          {group.items.length > 1 && !collapsed && (
             <button
               className="handover-btn inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600"
-              onClick={(e) => { e.stopPropagation(); onCollectAll(group); }}
+              onClick={() => onCollectAll(group)}
             >
               <PackageCheck className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Hand Over All</span>
               <span className="sm:hidden">All</span>
             </button>
           )}
+          <button
+            onClick={() => setCollapsed((v) => !v)}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
       {/* Items list */}
-      <div className="border-t border-slate-100 divide-y divide-slate-50">
-        {visibleItems.map((item) => (
-          <div key={item.transactionId} className="item-row flex items-center justify-between px-4 py-3 pl-16">
-            <div className="flex items-center gap-2 min-w-0">
-              <Package className="h-3.5 w-3.5 text-[#136dec] flex-shrink-0" />
-              <span className="text-sm font-medium text-slate-700 truncate">{item.itemName}</span>
-              <span className="flex-shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold text-slate-500" style={{ background: "#f1f5f9" }}>
-                {item.quantity} {item.quantity === 1 ? "unit" : "units"}
-              </span>
+      {!collapsed && (
+        <div className="border-t border-slate-100 divide-y divide-slate-50">
+          {visibleItems.map((item) => (
+            <div key={item.transactionId} className="item-row flex items-center justify-between px-3 py-3 sm:px-4 sm:pl-16 pl-4 gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Package className="h-3.5 w-3.5 text-[#136dec] flex-shrink-0" />
+                <span className="text-sm font-medium text-slate-700 truncate">{item.itemName}</span>
+                <span className="flex-shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold text-slate-500 whitespace-nowrap" style={{ background: "#f1f5f9" }}>
+                  {item.quantity} {item.quantity === 1 ? "unit" : "units"}
+                </span>
+              </div>
+              <button
+                className="handover-btn flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600"
+                onClick={() => onCollectOne({
+                  transactionId: item.transactionId,
+                  studentName: group.studentName,
+                  className: group.className,
+                  itemName: item.itemName,
+                  quantity: item.quantity,
+                  dateOfPayment: group.dateOfPayment,
+                })}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Hand Over</span>
+              </button>
             </div>
+          ))}
+          {/* Show more / show less toggle */}
+          {group.items.length > VISIBLE_LIMIT && (
             <button
-              className="handover-btn flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600"
-              onClick={() => onCollectOne({
-                transactionId: item.transactionId,
-                studentName: group.studentName,
-                className: group.className,
-                itemName: item.itemName,
-                quantity: item.quantity,
-                dateOfPayment: group.dateOfPayment,
-              })}
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-[#136dec] hover:bg-blue-50 transition-colors"
+              onClick={() => setShowAll((v) => !v)}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Hand Over
+              {showAll ? <><ChevronUp className="h-3.5 w-3.5" />Show less</> : <><ChevronDown className="h-3.5 w-3.5" />Show {hiddenCount} more item{hiddenCount !== 1 ? "s" : ""}</>}
             </button>
-          </div>
-        ))}
-
-        {/* Show more / show less toggle */}
-        {group.items.length > VISIBLE_LIMIT && (
-          <button
-            className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-[#136dec] hover:bg-blue-50 transition-colors"
-            onClick={() => setShowAll((v) => !v)}
-          >
-            {showAll ? (
-              <><ChevronUp className="h-3.5 w-3.5" />Show less</>
-            ) : (
-              <><ChevronDown className="h-3.5 w-3.5" />Show {hiddenCount} more item{hiddenCount !== 1 ? "s" : ""}</>
-            )}
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -487,7 +499,7 @@ export default function StaffAssignments() {
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search by student name, item, or class…"
+                placeholder="Search by student name…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}

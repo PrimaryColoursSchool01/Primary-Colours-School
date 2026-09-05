@@ -116,7 +116,7 @@ export const getStaffDashboard = async (req, res, next) => {
 
 export const getStaffAssignments = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, classId } = req.query;
+    const { page = 1, limit = 20, classId, search } = req.query;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = parseInt(limit);
 
@@ -139,6 +139,31 @@ export const getStaffAssignments = async (req, res, next) => {
       const classPRs = await PaymentRecord.find({ classId: new mongoose.Types.ObjectId(classId) }).select("_id");
       const classPRIds = classPRs.map((r) => r._id);
       baseFilter.paymentRecordId = { $in: classPRIds };
+    }
+
+    // ── Search by student name only — preserves group integrity ──────────
+    if (search && search.trim()) {
+      const matchingPRs = await PaymentRecord.find({
+        nameOfChild: { $regex: search.trim(), $options: "i" },
+      }).select("_id");
+
+      if (matchingPRs.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "Assignments fetched successfully",
+          data: { groups: [], total: 0, page: pageNum, pages: 0 },
+        });
+      }
+
+      // Intersect with any existing paymentRecordId filter
+      const searchIds = matchingPRs.map((r) => r._id);
+      if (baseFilter.paymentRecordId) {
+        const existing = baseFilter.paymentRecordId.$in.map((id) => id.toString());
+        const filtered = searchIds.filter((id) => existing.includes(id.toString()));
+        baseFilter.paymentRecordId = { $in: filtered };
+      } else {
+        baseFilter.paymentRecordId = { $in: searchIds };
+      }
     }
 
     const allTransactions = await ItemTransaction.find(baseFilter)
@@ -282,21 +307,27 @@ export const getStaffHistory = async (req, res, next) => {
       baseFilter.paymentRecordId = { $in: classPRIds };
     }
 
+    // ── Search by student name only — preserves group integrity ──────────
     if (search && search.trim()) {
-      const q = search.trim();
-      const [matchingPRs, matchingItems, matchingStaff] = await Promise.all([
-        PaymentRecord.find({ nameOfChild: { $regex: q, $options: "i" } }).select("_id"),
-        Item.find({ name: { $regex: q, $options: "i" } }).select("_id"),
-        User.find({ fullName: { $regex: q, $options: "i" } }).select("_id"),
-      ]);
+      const matchingPRs = await PaymentRecord.find({
+        nameOfChild: { $regex: search.trim(), $options: "i" },
+      }).select("_id");
 
-      const searchConditions = [];
-      if (matchingPRs.length) searchConditions.push({ paymentRecordId: { $in: matchingPRs.map((r) => r._id) } });
-      if (matchingItems.length) searchConditions.push({ itemId: { $in: matchingItems.map((i) => i._id) } });
-      if (matchingStaff.length) searchConditions.push({ handedOverBy: { $in: matchingStaff.map((u) => u._id) } });
+      if (matchingPRs.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "History fetched successfully",
+          data: { groups: [], total: 0, page: pageNum, pages: 0 },
+        });
+      }
 
-      if (searchConditions.length > 0) {
-        baseFilter = { ...baseFilter, $or: [...(baseFilter.$or || []), ...searchConditions] };
+      const searchIds = matchingPRs.map((r) => r._id);
+      if (baseFilter.paymentRecordId) {
+        const existing = baseFilter.paymentRecordId.$in.map((id) => id.toString());
+        const filtered = searchIds.filter((id) => existing.includes(id.toString()));
+        baseFilter.paymentRecordId = { $in: filtered };
+      } else {
+        baseFilter.paymentRecordId = { $in: searchIds };
       }
     }
 

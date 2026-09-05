@@ -11,6 +11,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   X,
   History,
   Calendar,
@@ -127,13 +129,81 @@ function Pagination({ page, pages, total, limit, onPage }) {
   );
 }
 
+/* ─── History Group Card ──────────────────────────────────────────────────── */
+
+function HistoryGroupCard({ group }) {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 bg-slate-50/50">
+        {/* Left side — clickable to collapse */}
+        <button
+          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+          onClick={() => setCollapsed((v) => !v)}
+        >
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(group.studentName) }}>
+            {group.studentName?.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-slate-900 text-sm truncate">{group.studentName}</p>
+            <p className="text-xs text-slate-400">{group.className}</p>
+          </div>
+        </button>
+        {/* Right side */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold" style={{ background: "#d1fae5", color: "#065f46" }}>
+            {group.items.length}
+          </span>
+          <button
+            onClick={() => setCollapsed((v) => !v)}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+      {!collapsed && (
+        <div className="divide-y divide-slate-50">
+          {group.items.map((item) => (
+            <div key={item.transactionId} className="px-3 py-3 sm:px-4 sm:pl-16">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ background: "rgba(16,185,129,0.08)", color: "#059669" }}>
+                    <Package className="h-3 w-3" />{item.itemName}
+                  </span>
+                  <span className="rounded-md px-2 py-0.5 text-xs font-bold" style={{ background: "#f1f5f9", color: "#475569" }}>×{item.quantity}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                  <div className="flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                    <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(item.handedOverAt)}</span>
+                  </div>
+                  <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <User className="h-3 w-3" />{item.handedOverBy}
+                  </span>
+                  {item.note && item.note !== "Marked as collected" && item.note !== "All items handed over together" && (
+                    <span className="text-xs italic text-slate-400 truncate max-w-[200px]" title={item.note}>"{item.note}"</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const LIMIT = 20;
 
 function defaultDates() {
   const today = new Date();
-  const prior = new Date();
-  prior.setDate(today.getDate() - 30);
-  return { end: today.toISOString().split("T")[0], start: prior.toISOString().split("T")[0] };
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(today.getFullYear() - 1);
+  return {
+    start: oneYearAgo.toISOString().split("T")[0],
+    end: today.toISOString().split("T")[0],
+  };
 }
 
 export default function StaffHistory() {
@@ -160,11 +230,8 @@ export default function StaffHistory() {
       setError(null);
       const params = { page: pg, limit: LIMIT };
       if (appliedSearch.trim()) params.search = appliedSearch;
-      const hasCustomDateRange = appliedStart !== defaults.start || appliedEnd !== defaults.end;
-      if (hasCustomDateRange) {
-        if (appliedStart) params.startDate = appliedStart;
-        if (appliedEnd) params.endDate = appliedEnd;
-      }
+      if (appliedStart) params.startDate = appliedStart;
+      if (appliedEnd) params.endDate = appliedEnd;
       const res = await getStaffHistory(params);
       setGroups(res.data.groups || []);
       setTotal(res.data.total || 0);
@@ -242,7 +309,7 @@ export default function StaffHistory() {
             <div className="search-wrap relative flex-1">
               <Search className="search-icon absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors" />
               <Input
-                placeholder="Search student, item, class, staff…"
+                placeholder="Search by student name…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
@@ -308,46 +375,7 @@ export default function StaffHistory() {
           ) : (
             <div className="space-y-3">
               {groups.map((group, idx) => (
-                <div key={group.paymentRecordId} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden" style={{ animationDelay: `${idx * 25}ms` }}>
-                  <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 bg-slate-50/50">
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(group.studentName) }}>
-                      {group.studentName?.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900 text-sm truncate">{group.studentName}</p>
-                      <p className="text-xs text-slate-400">{group.className}</p>
-                    </div>
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold flex-shrink-0" style={{ background: "#d1fae5", color: "#065f46" }}>
-                      {group.items.length}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-slate-50">
-                    {group.items.map((item) => (
-                      <div key={item.transactionId} className="px-4 py-3 pl-16">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold flex-shrink-0" style={{ background: "rgba(16,185,129,0.08)", color: "#059669" }}>
-                              <Package className="h-3 w-3" />{item.itemName}
-                            </span>
-                            <span className="rounded-md px-2 py-0.5 text-xs font-bold flex-shrink-0" style={{ background: "#f1f5f9", color: "#475569" }}>×{item.quantity}</span>
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                            <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(item.handedOverAt)}</span>
-                          </div>
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <User className="h-3 w-3" />{item.handedOverBy}
-                          </span>
-                          {item.note && item.note !== "Marked as collected" && (
-                            <span className="text-xs italic text-slate-400 truncate max-w-[200px]" title={item.note}>"{item.note}"</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <HistoryGroupCard key={group.paymentRecordId} group={group} />
               ))}
               {pages > 1 && (
                 <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3">
